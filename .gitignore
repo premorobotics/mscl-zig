@@ -10,7 +10,6 @@
 !build.zig
 !build.zig.zon
 !.github/**
-!vendor/**
 
 !*.zig
 !*.h
