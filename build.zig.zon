@@ -1,0 +1,26 @@
+.{
+    .name = .mscl_zig,
+    .version = "0.0.0",
+    .fingerprint = 0x8c0f916a80b02dcf,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .translate_c = .{
+            .url = "git+https://codeberg.org/ziglang/translate-c?ref=2.0.2#c11030012dc325d446474d17b78c242fd1d622ec",
+            .hash = "translate_c-2.0.2-Q_BUWvBNBwBgPKQJPblip6M7AHNK_IPNPmyv4rSIQMQc",
+        },
+        .mscl = .{
+            .url = "git+https://github.com/HBK-MicroStrain/MSCL?ref=v68.6.0#b271e95edee562590605c6546eaaf077adcf342a",
+            .hash = "N-V-__8AAIKkbwACo2O7hQCY4tPaNYgvFbZkBxY2p1B5AptV",
+        },
+        .boost = .{
+            .url = "https://github.com/aaumar25/boost-libraries-zig/archive/c44887c.tar.gz",
+            .hash = "boost_libraries-1.91.0-frkKHKCFAQCsUhfg1pBYjvCGRKV5iHRCLeIDwlNYEs5M",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "include",
+        "src",
+    },
+}
