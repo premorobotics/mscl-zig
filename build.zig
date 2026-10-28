@@ -136,43 +136,6 @@ fn buildLibMscl(
     const mscl = b.dependency("mscl", .{});
     // MSCL's sources include its headers as `mscl/...`.
     mod.addIncludePath(mscl.path("src"));
-    // The MSCL release pinned in build.zig.zon, read from the `mscl` URL, which
-    // ends in `?ref=v<version>#<commit>`.
-    const mscl_release = comptime release: {
-        const url = @import("build.zig.zon").dependencies.mscl.url;
-        const ref = "?ref=v";
-        const version_start = (std.mem.indexOf(u8, url, ref) orelse
-            @compileError("the mscl URL has no " ++ ref)) + ref.len;
-        const commit_start = (std.mem.indexOfScalarPos(
-            u8,
-            url,
-            version_start,
-            '#',
-        ) orelse @compileError("the mscl URL has no #<commit>")) + 1;
-        const version = std.SemanticVersion.parse(
-            url[version_start .. commit_start - 1],
-        ) catch @compileError("the mscl URL's ref is not v<version>");
-        break :release .{
-            .major = @as(i64, version.major),
-            .minor = @as(i64, version.minor),
-            .patch = @as(i64, version.patch),
-            // shortened commit hash
-            .commit = url[commit_start..][0..7],
-            .copyright_year = 2026,
-        };
-    };
-    // `mscl/mscl.h` includes it for MSCL's version.
-    const lib_version = b.addConfigHeader(.{
-        .style = .{ .cmake = mscl.path("cmake/LibVersion.h.in") },
-        .include_path = "mscl/LibVersion.h",
-    }, .{
-        .MSCL_CURRENT_YEAR = mscl_release.copyright_year,
-        .PROJECT_VERSION_MAJOR = mscl_release.major,
-        .PROJECT_VERSION_MINOR = mscl_release.minor,
-        .PROJECT_VERSION_PATCH = mscl_release.patch,
-        .MSCL_GIT_COMMIT = mscl_release.commit,
-    });
-    mod.addConfigHeader(lib_version);
 
     // As CMake's precompiled header, `stdafx.h` comes first in every source.
     // Not `-include mscl/stdafx.h`: Zig opens that file from the build root
@@ -461,7 +424,6 @@ fn buildLibMscl(
         .linkage = if (shared) .dynamic else .static,
         .root_module = mod,
     });
-    lib.installConfigHeader(lib_version);
     // As in CMake, whatever links MSCL includes its headers from `src` too,
     // but only the headers that the sources above include.
     const headers: []const []const u8 = &.{

@@ -10,7 +10,6 @@
 #include "mscl/Communication/Connection.h"
 #include "mscl/Communication/Devices.h"
 #include "mscl/Exceptions.h"
-#include "mscl/LibVersion.h"
 #include "mscl/MicroStrain/Wireless/BaseStation.h"
 #include "mscl/MicroStrain/Wireless/Configuration/ConfigIssue.h"
 #include "mscl/MicroStrain/Wireless/Configuration/WirelessNodeConfig.h"
@@ -353,11 +352,6 @@ extern "C" {
 const char *mscl_last_error(void)
 {
     return last_error;
-}
-
-mscl_version mscl_get_version(void)
-{
-    return {MSCL_MAJOR, MSCL_MINOR, MSCL_PATCH, MSCL_GIT_COMMIT};
 }
 
 mscl_status mscl_list_base_stations(mscl_port_info **ports, size_t *count)

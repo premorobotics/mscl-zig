@@ -214,22 +214,11 @@ typedef struct mscl_sweep {
     mscl_data_point *points;
 } mscl_sweep;
 
-typedef struct mscl_version {
-    uint32_t major;
-    uint32_t minor;
-    uint32_t patch;
-    /* Shortened git commit hash; a static string. */
-    const char *git_commit;
-} mscl_version;
-
 /*
  * Message of the last failed call on this thread. It stays valid until the
  * next failed call on the same thread.
  */
 EXTERN_C const char *mscl_last_error(void);
-
-/* The MSCL release this library was built from. */
-EXTERN_C mscl_version mscl_get_version(void);
 
 /* Base stations attached to this computer; free with mscl_port_infos_free. */
 EXTERN_C mscl_status mscl_list_base_stations(

@@ -9,8 +9,8 @@
             .hash = "translate_c-2.0.2-Q_BUWvBNBwBgPKQJPblip6M7AHNK_IPNPmyv4rSIQMQc",
         },
         .mscl = .{
-            .url = "git+https://github.com/HBK-MicroStrain/MSCL?ref=v68.6.0#b271e95edee562590605c6546eaaf077adcf342a",
-            .hash = "N-V-__8AAIKkbwACo2O7hQCY4tPaNYgvFbZkBxY2p1B5AptV",
+            .url = "https://github.com/premorobotics/MSCL/archive/9a7d3d3.tar.gz",
+            .hash = "N-V-__8AAFmlbwCgybqmqRFmKlto2AYxy1SVTT22LnUYxJxf",
         },
         .boost = .{
             .url = "https://github.com/aaumar25/boost-libraries-zig/archive/c44887c.tar.gz",
