@@ -1,0 +1,87 @@
+# mscl-zig
+
+Zig bindings for [MSCL by HBK-MicroStrain](https://github.com/HBK-MicroStrain/MSCL)
+
+This package build MSCL by Zig. The MSCL used by this package is not MSCL upstream, but a fork to ensure it is buildable by zig ([fork](https://github.com/premorobotics/MSCL/tree/main)).
+
+Supported functionality:
+- MSCL/Wireless (bindings development in progress)
+
+Tested environment:
+- `x86_64-windows-gnu`
+- `x86_64-linux-gnu`
+
+Untested options (not recommended to use):
+- `-Dwith_ssl`
+- `-Dwith_websockets`
+
+## Requirements
+- zig 0.17.0
+
+## How to use
+### Build libraries
+```bash
+zig build -Doptimize=<debug|safe|fast|small> \
+    -Dshared \
+    -Dlink_static_deps \
+    -Dwith_ssl \
+    -Dwith_websockets \
+```
+
+### Helper
+```bash
+Project-Specific Options:
+  -Dtarget=[string]            The CPU architecture, OS, and ABI to build for
+  -Dcpu=[string]               Target CPU features to add or subtract
+  -Dofmt=[string]              Target object format
+  -Ddynamic-linker=[string]    Path to interpreter on the target system
+  -Doptimize=[enum]            Prioritize performance, safety, or binary size
+                                 Supported Values:
+                                   debug
+                                   safe
+                                   fast
+                                   small
+  -Dshared=[bool]              Build MSCL as a shared library (default: false)
+  -Dlink_static_deps=[bool]    Link MSCL's dependencies statically; always on when MSCL is static (default: true)
+  -Dwith_ssl=[bool]            Compile MSCL with SSL support, using the system's OpenSSL (default: false)
+  -Dwith_websockets=[bool]     Compile MSCL with WebSocket support (default: false)
+```
+
+### Fetch the library
+```bash
+zig fetch --save=mscl_zig git+https://github.com/premorobotics/mscl-zig
+```
+
+### Add in build.zig
+```zig
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const mscl_zig = b.dependency("mscl_zig", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const exe = b.addExecutable(.{
+        .name = "executable_name",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("executable_main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "mscl_zig", .module = mscl_zig.module("mscl_zig") },
+            },
+        }),
+    });
+    b.installArtifact(exe);
+    const run_step = b.step("run", "Execute the executable");
+    run_step.dependOn(&b.addRunArtifact(exe).step);
+}
+```
+
+## Dependency
+- [MSCL fork](https://github.com/premorobotics/MSCL/tree/main) --> Minor change to allow zig build MSCL
+- [boost-libraries-zig](https://github.com/allyourcodebase/boost-libraries-zig) --> Support zig 0.17.0 and add lambda package
+- [translate-c](https://codeberg.org/ziglang/translate-c)
