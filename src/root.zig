@@ -1,5 +1,6 @@
 const std = @import("std");
-const mscl = @import("mscl");
+pub const mscl = @import("mscl");
+pub const BaseStation = @import("BaseStation.zig");
 
 pub const Error = error{
     /// The port does not exist.
@@ -26,4 +27,8 @@ pub fn openBaseStation(
 test openBaseStation {
     const actual = openBaseStation("/dev/mscl-zig-no-such-port", 3000000);
     try std.testing.expectError(Error.InvalidSerialPort, actual);
+}
+
+test {
+    _ = BaseStation;
 }
