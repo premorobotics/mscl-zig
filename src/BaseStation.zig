@@ -7,10 +7,10 @@ handle: *root.mscl.mscl_base_station,
 
 pub const Error = error{
     Connection,
-    /// The specified com port is invalid.
     InvalidSerialPort,
+    Communication,
     /// Any other failure; `root.mscl.mscl_last_error()` describes it.
-    Failed,
+    MsclFailure,
 };
 
 /// Opens the base station on `port`. USB base stations use a baud rate of
@@ -24,7 +24,10 @@ pub fn init(port: [*:0]const u8, baud_rate: u32) Error!BaseStation {
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         // The specified com port is invalid.
         root.mscl.MSCL_ERROR_INVALID_SERIAL_PORT => Error.InvalidSerialPort,
-        else => unreachable,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
     };
 }
 
@@ -41,20 +44,27 @@ pub fn ping(self: BaseStation) Error!bool {
     return switch (status) {
         root.mscl.MSCL_OK => true,
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => unreachable,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
     };
 }
 
 /// Sets how many times reading or writing a config option is retried; MSCL
 /// starts at 0. The timeout applies to each attempt.
-pub fn setRetries(self: BaseStation, retries: u8) Error!void {
-    const status = root.mscl.mscl_base_station_set_retries(
+pub fn setRetries(self: BaseStation, retries: u8) void {
+    _ = root.mscl.mscl_base_station_set_retries(
         self.handle,
         retries,
     );
-    if (status != root.mscl.MSCL_OK) {
-        return Error.Failed;
-    }
+}
+
+/// Returns how many times reading or writing a config option is retried.
+pub fn getRetries(self: BaseStation) u8 {
+    var retries: u8 = 0;
+    _ = root.mscl.mscl_base_station_get_retries(self.handle, &retries);
+    return retries;
 }
 
 /// Starts the beacon from the system time (UTC) and returns that time in
@@ -65,15 +75,30 @@ pub fn enableBeacon(self: BaseStation) Error!u64 {
         self.handle,
         &beacon_time_ns,
     );
-    if (status != root.mscl.MSCL_OK) {
-        return Error.Failed;
-    }
-    return beacon_time_ns;
+    return switch (status) {
+        root.mscl.MSCL_OK => beacon_time_ns,
+        // A connection error has occurred with the BaseStation
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // The enable beacon command has failed.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }
 
 pub fn disableBeacon(self: BaseStation) Error!void {
     const status = root.mscl.mscl_base_station_disable_beacon(self.handle);
-    if (status != root.mscl.MSCL_OK) {
-        return Error.Failed;
-    }
+    return switch (status) {
+        root.mscl.MSCL_OK => {},
+        // A connection error has occurred with the BaseStation
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // The disable beacon command has failed.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }

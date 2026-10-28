@@ -254,6 +254,10 @@ EXTERN_C mscl_status mscl_base_station_set_retries(
     mscl_base_station *base_station,
     uint8_t retries
 );
+EXTERN_C mscl_status mscl_base_station_get_retries(
+    mscl_base_station *base_station,
+    uint8_t *retries
+);
 EXTERN_C mscl_status mscl_base_station_enable_beacon(
     mscl_base_station *base_station,
     uint64_t *beacon_time_ns

@@ -456,6 +456,17 @@ mscl_status mscl_base_station_set_retries(
     return call([&] { base_station->base.readWriteRetries(retries); });
 }
 
+mscl_status mscl_base_station_get_retries(
+    mscl_base_station *base_station,
+    uint8_t *retries
+)
+{
+    if (base_station == nullptr || retries == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *retries = base_station->base.readWriteRetries(); });
+}
+
 mscl_status mscl_base_station_enable_beacon(
     mscl_base_station *base_station,
     uint64_t *beacon_time_ns
