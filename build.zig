@@ -214,17 +214,7 @@ fn buildLibMscl(
         .flags = flags,
     });
     switch (target.result.os.tag) {
-        .windows => {
-            mod.addCSourceFiles(.{
-                .root = mscl.path("src/mscl/Communication"),
-                .files = &.{
-                    "UpnpDeviceFinderCallback.cpp",
-                    "UpnpService.cpp",
-                    "WsdaFinder.cpp",
-                },
-                .flags = flags,
-            });
-        },
+        .windows => {},
         .linux => {
             mod.addCSourceFiles(.{
                 .root = mscl.path("src/mscl/Communication"),
