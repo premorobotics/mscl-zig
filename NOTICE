@@ -1,0 +1,34 @@
+mscl-zig
+Copyright (c) 2026 Premo Robotics.
+
+mscl-zig is licensed under the MIT License; see LICENSE-MIT.
+
+mscl-zig builds and links the following third-party software. Each remains
+under its own license.
+
+MSCL
+  https://github.com/HBK-MicroStrain/MSCL
+  Copyright (c) 2015-2026 MicroStrain by HBK.
+  MIT License.
+  mscl-zig builds a fork with changes that let Zig build it:
+  https://github.com/premorobotics/MSCL
+
+Boost C++ Libraries
+  https://www.boost.org
+  Boost Software License 1.0.
+  Built through a fork of boost-libraries-zig, also under the Boost
+  Software License 1.0:
+  https://github.com/aaumar25/boost-libraries-zig
+  (upstream: https://github.com/allyourcodebase/boost-libraries-zig)
+
+translate-c
+  https://codeberg.org/ziglang/translate-c
+  Copyright (c) Zig contributors.
+  MIT License.
+  Generates the Zig bindings for the C API. Its helper modules are compiled
+  into every program that uses mscl-zig.
+
+OpenSSL, only when built with -Dwith_ssl
+  https://www.openssl.org
+  Linked from the system. Apache License 2.0 for OpenSSL 3.0 and later; the
+  OpenSSL and SSLeay licenses for earlier versions.
