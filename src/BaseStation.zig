@@ -41,6 +41,7 @@ pub fn ping(self: BaseStation) Error!bool {
     return switch (status) {
         root.mscl.MSCL_OK => true,
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => unreachable,
     };
 }
 
