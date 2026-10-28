@@ -72,5 +72,21 @@ test openBaseStation {
 }
 
 test {
-    _ = BaseStation;
+    referenceAll(@This());
+}
+
+/// References every public declaration, recursing into structs, so that a
+/// build compiles all of them rather than only the ones something uses.
+fn referenceAll(comptime T: type) void {
+    inline for (@typeInfo(T).@"struct".decl_names) |name| {
+        _ = &@field(T, name);
+        if (@TypeOf(@field(T, name)) == type) {
+            const Inner = @field(T, name);
+            // translate-c turns every macro it cannot translate into a
+            // `@compileError`, so `mscl` cannot be referenced whole.
+            if (Inner != mscl and @typeInfo(Inner) == .@"struct") {
+                referenceAll(Inner);
+            }
+        }
+    }
 }
