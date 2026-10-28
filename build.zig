@@ -20,15 +20,12 @@ pub fn build(b: *std.Build) std.mem.Allocator.Error!void {
         },
     );
     trans_libmscl_wrapper.linkLibrary(libmscl_wrapper);
-    const mod = b.createModule(.{
+    const mod = b.addModule("mscl_zig", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
-        .link_libc = true,
-        .link_libcpp = true,
     });
     mod.addImport("mscl", trans_libmscl_wrapper.mod);
-    const lib = b.addLibrary(.{ .name = "mscl_zig", .root_module = mod });
 
     b.installArtifact(libmscl);
     b.installArtifact(libmscl_wrapper);
