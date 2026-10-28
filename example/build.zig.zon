@@ -1,0 +1,16 @@
+.{
+    .name = .mscl_zig_example,
+    .version = "0.0.0",
+    .fingerprint = 0x9770545f13f57f10,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .mscl_zig = .{
+            .path = "..",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "list_base_stations.zig",
+    },
+}

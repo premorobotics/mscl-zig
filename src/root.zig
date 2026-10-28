@@ -8,7 +8,7 @@ pub const Error = error{
     /// Any other failure; `mscl.mscl_last_error()` describes it.
     Failed,
 };
-
+const _ = 1;
 /// How a device is connected to this computer.
 pub const ConnectionType = enum(mscl.mscl_connection_type) {
     serial = mscl.MSCL_CONNECTION_TYPE_SERIAL,

@@ -5,11 +5,6 @@ const Translator = @import("translate_c").Translator;
 pub fn build(b: *std.Build) std.mem.Allocator.Error!void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const example = b.option(
-        bool,
-        "example",
-        "Build the examples",
-    ) orelse false;
     // Prepare the `translate-c` dependency.
     const translate_c = b.dependency("translate_c", .{});
     const libmscl = buildLibMscl(b, target, optimize);
@@ -31,21 +26,6 @@ pub fn build(b: *std.Build) std.mem.Allocator.Error!void {
         .optimize = optimize,
     });
     mod.addImport("mscl", trans_libmscl_wrapper.mod);
-
-    if (example) {
-        const exe = b.addExecutable(.{
-            .name = "list_base_stations",
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("example/list_base_stations.zig"),
-                .target = target,
-                .optimize = optimize,
-                .imports = &.{.{ .name = "mscl_zig", .module = mod }},
-            }),
-        });
-        b.installArtifact(exe);
-        const run_step = b.step("run", "List the attached base stations");
-        run_step.dependOn(&b.addRunArtifact(exe).step);
-    }
 
     const tests = b.addTest(.{ .root_module = mod });
     const test_step = b.step("test", "Run the tests");
