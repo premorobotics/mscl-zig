@@ -160,17 +160,25 @@ typedef enum mscl_set_to_idle_result {
     MSCL_SET_TO_IDLE_NOT_COMPLETED = 3
 } mscl_set_to_idle_result;
 
+typedef enum mscl_connection_type {
+    MSCL_CONNECTION_TYPE_SERIAL = 0,
+    MSCL_CONNECTION_TYPE_TCP = 1
+} mscl_connection_type;
+
 typedef struct mscl_base_station mscl_base_station;
 typedef struct mscl_node mscl_node;
 typedef struct mscl_node_config mscl_node_config;
 typedef struct mscl_sync_network mscl_sync_network;
 typedef struct mscl_datalog_downloader mscl_datalog_downloader;
 
-typedef struct mscl_port_info {
+typedef struct mscl_device_info {
+    /* The key MSCL lists the device under. */
     char port[256];
     char description[256];
+    char serial[256];
     uint32_t baud_rate;
-} mscl_port_info;
+    mscl_connection_type connection_type;
+} mscl_device_info;
 
 typedef struct mscl_ping_result {
     bool success;
@@ -220,12 +228,15 @@ typedef struct mscl_sweep {
  */
 EXTERN_C const char *mscl_last_error(void);
 
-/* Base stations attached to this computer; free with mscl_port_infos_free. */
+/*
+ * Base stations attached to this computer; free with
+ * mscl_device_infos_free.
+ */
 EXTERN_C mscl_status mscl_list_base_stations(
-    mscl_port_info **ports,
+    mscl_device_info **devices,
     size_t *count
 );
-EXTERN_C void mscl_port_infos_free(mscl_port_info *ports);
+EXTERN_C void mscl_device_infos_free(mscl_device_info *devices);
 
 /* USB base stations use a baud rate of 3000000. */
 EXTERN_C mscl_status mscl_base_station_open(

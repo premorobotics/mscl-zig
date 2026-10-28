@@ -210,6 +210,12 @@ MSCL_C_SAME(
     mscl::SetToIdleStatus::setToIdleResult_notCompleted
 );
 
+MSCL_C_SAME(
+    MSCL_CONNECTION_TYPE_SERIAL,
+    mscl::DeviceInfo::connectionType_serial
+);
+MSCL_C_SAME(MSCL_CONNECTION_TYPE_TCP, mscl::DeviceInfo::connectionType_tcp);
+
 #undef MSCL_C_SAME
 
 namespace {
@@ -354,40 +360,48 @@ const char *mscl_last_error(void)
     return last_error;
 }
 
-mscl_status mscl_list_base_stations(mscl_port_info **ports, size_t *count)
+mscl_status mscl_list_base_stations(mscl_device_info **devices, size_t *count)
 {
-    if (ports == nullptr || count == nullptr) {
+    if (devices == nullptr || count == nullptr) {
         return fail_null(__func__);
     }
-    *ports = nullptr;
+    *devices = nullptr;
     *count = 0;
     return call([&] {
-        const mscl::Devices::DeviceList devices =
+        const mscl::Devices::DeviceList list =
             mscl::Devices::listBaseStations();
-        if (devices.empty()) {
+        if (list.empty()) {
             return;
         }
-        mscl_port_info *result =
-            allocate_zeroed<mscl_port_info>(devices.size());
+        mscl_device_info *result =
+            allocate_zeroed<mscl_device_info>(list.size());
         size_t i = 0;
-        for (const auto &device : devices) {
-            copy_string(result[i].port, sizeof(result[i].port), device.first);
+        for (const auto &[port, info] : list) {
+            copy_string(result[i].port, sizeof(result[i].port), port);
             copy_string(
                 result[i].description,
                 sizeof(result[i].description),
-                device.second.description()
+                info.description()
             );
-            result[i].baud_rate = device.second.baudRate();
+            copy_string(
+                result[i].serial,
+                sizeof(result[i].serial),
+                info.serial()
+            );
+            result[i].baud_rate = info.baudRate();
+            result[i].connection_type = static_cast<mscl_connection_type>(
+                info.connectionType()
+            );
             i++;
         }
-        *ports = result;
-        *count = devices.size();
+        *devices = result;
+        *count = list.size();
     });
 }
 
-void mscl_port_infos_free(mscl_port_info *ports)
+void mscl_device_infos_free(mscl_device_info *devices)
 {
-    std::free(ports);
+    std::free(devices);
 }
 
 mscl_status mscl_base_station_open(
