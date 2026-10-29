@@ -8,8 +8,11 @@ Supported functionality:
 - MSCL/Wireless (bindings development in progress)
 
 Tested environment:
-- `x86_64-windows-gnu`
-- `x86_64-linux-gnu`
+- OS
+  - `x86_64-windows-gnu`
+  - `x86_64-linux-gnu`
+- Device
+  - WSDA-200-USB
 
 Untested options (not recommended to use):
 - `-Dwith_ssl`
