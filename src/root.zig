@@ -15,10 +15,61 @@ pub const ConnectionType = enum(mscl.mscl_connection_type) {
     tcp = mscl.MSCL_CONNECTION_TYPE_TCP,
 };
 
+/// Represents the frequency (channel) that can be used for Wireless Devices.
+pub const Frequency = enum(mscl.mscl_frequency) {
+    unknown = mscl.MSCL_FREQUENCY_UNKNOWN,
+    channel_11 = mscl.MSCL_FREQUENCY_11,
+    channel_12 = mscl.MSCL_FREQUENCY_12,
+    channel_13 = mscl.MSCL_FREQUENCY_13,
+    channel_14 = mscl.MSCL_FREQUENCY_14,
+    channel_15 = mscl.MSCL_FREQUENCY_15,
+    channel_16 = mscl.MSCL_FREQUENCY_16,
+    channel_17 = mscl.MSCL_FREQUENCY_17,
+    channel_18 = mscl.MSCL_FREQUENCY_18,
+    channel_19 = mscl.MSCL_FREQUENCY_19,
+    channel_20 = mscl.MSCL_FREQUENCY_20,
+    channel_21 = mscl.MSCL_FREQUENCY_21,
+    channel_22 = mscl.MSCL_FREQUENCY_22,
+    channel_23 = mscl.MSCL_FREQUENCY_23,
+    channel_24 = mscl.MSCL_FREQUENCY_24,
+    channel_25 = mscl.MSCL_FREQUENCY_25,
+    channel_26 = mscl.MSCL_FREQUENCY_26,
+    _,
+};
+
 /// Available Communication Protocol types.
 pub const CommProtocol = enum(mscl.mscl_comm_protocol) {
     lxrs = mscl.MSCL_COMM_PROTOCOL_LXRS,
     lxrs_plus = mscl.MSCL_COMM_PROTOCOL_LXRS_PLUS,
+    _,
+};
+
+/// The possible region codes for the device.
+pub const RegionCode = enum(mscl.mscl_region_code) {
+    usa = mscl.MSCL_REGION_CODE_USA,
+    european_union = mscl.MSCL_REGION_CODE_EUROPEAN_UNION,
+    japan = mscl.MSCL_REGION_CODE_JAPAN,
+    other = mscl.MSCL_REGION_CODE_OTHER,
+    brazil = mscl.MSCL_REGION_CODE_BRAZIL,
+    china = mscl.MSCL_REGION_CODE_CHINA,
+    australia_new_zealand = mscl.MSCL_REGION_CODE_AUSTRALIA_NEW_ZEALAND,
+    singapore = mscl.MSCL_REGION_CODE_SINGAPORE,
+    canada = mscl.MSCL_REGION_CODE_CANADA,
+    south_africa = mscl.MSCL_REGION_CODE_SOUTH_AFRICA,
+    indonesia = mscl.MSCL_REGION_CODE_INDONESIA,
+    taiwan = mscl.MSCL_REGION_CODE_TAIWAN,
+    _,
+};
+
+/// Represents the types of microcontrollers possible on the Wireless Devices.
+pub const Microcontroller = enum(mscl.mscl_microcontroller) {
+    @"18f452" = mscl.MSCL_MICROCONTROLLER_18F452,
+    @"18f4620" = mscl.MSCL_MICROCONTROLLER_18F4620,
+    @"18f46k20" = mscl.MSCL_MICROCONTROLLER_18F46K20,
+    @"18f67k90" = mscl.MSCL_MICROCONTROLLER_18F67K90,
+    efm32wg990f256 = mscl.MSCL_MICROCONTROLLER_EFM32WG990F256,
+    efr32fg1p132f256gm48 = mscl.MSCL_MICROCONTROLLER_EFR32FG1P132F256GM48,
+    efr32mg1p232f256gm48 = mscl.MSCL_MICROCONTROLLER_EFR32MG1P232F256GM48,
     _,
 };
 

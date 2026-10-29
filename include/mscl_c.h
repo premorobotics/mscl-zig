@@ -165,6 +165,26 @@ typedef enum mscl_connection_type {
     MSCL_CONNECTION_TYPE_TCP = 1
 } mscl_connection_type;
 
+typedef enum mscl_frequency {
+    MSCL_FREQUENCY_UNKNOWN = 0,
+    MSCL_FREQUENCY_11 = 11,
+    MSCL_FREQUENCY_12 = 12,
+    MSCL_FREQUENCY_13 = 13,
+    MSCL_FREQUENCY_14 = 14,
+    MSCL_FREQUENCY_15 = 15,
+    MSCL_FREQUENCY_16 = 16,
+    MSCL_FREQUENCY_17 = 17,
+    MSCL_FREQUENCY_18 = 18,
+    MSCL_FREQUENCY_19 = 19,
+    MSCL_FREQUENCY_20 = 20,
+    MSCL_FREQUENCY_21 = 21,
+    MSCL_FREQUENCY_22 = 22,
+    MSCL_FREQUENCY_23 = 23,
+    MSCL_FREQUENCY_24 = 24,
+    MSCL_FREQUENCY_25 = 25,
+    MSCL_FREQUENCY_26 = 26
+} mscl_frequency;
+
 typedef enum mscl_comm_protocol {
     MSCL_COMM_PROTOCOL_LXRS = 0,
     MSCL_COMM_PROTOCOL_LXRS_PLUS = 1
@@ -184,6 +204,31 @@ typedef enum mscl_region_code {
     MSCL_REGION_CODE_INDONESIA = 10,
     MSCL_REGION_CODE_TAIWAN = 11
 } mscl_region_code;
+
+typedef enum mscl_microcontroller {
+    MSCL_MICROCONTROLLER_18F452 = 31,
+    MSCL_MICROCONTROLLER_18F4620 = 32,
+    MSCL_MICROCONTROLLER_18F46K20 = 33,
+    MSCL_MICROCONTROLLER_18F67K90 = 34,
+    MSCL_MICROCONTROLLER_EFM32WG990F256 = 35,
+    MSCL_MICROCONTROLLER_EFR32FG1P132F256GM48 = 36,
+    MSCL_MICROCONTROLLER_EFR32MG1P232F256GM48 = 37
+} mscl_microcontroller;
+
+typedef enum mscl_base_model {
+    MSCL_BASE_MODEL_WSDA_1000 = 63140050,
+    MSCL_BASE_MODEL_WSDA_1500 = 63141500,
+    MSCL_BASE_MODEL_WSDA_2000 = 63142000,
+    MSCL_BASE_MODEL_WSDA_PRO = 63143000,
+    MSCL_BASE_MODEL_WSDA_BASE_200_LEGACY = 63070200,
+    MSCL_BASE_MODEL_WSDA_BASE_200 = 63072040,
+    MSCL_BASE_MODEL_WSDA_BASE_200_EXT_ANTENNA = 63072140,
+    MSCL_BASE_MODEL_WSDA_BASE_101_ANALOG = 63071010,
+    MSCL_BASE_MODEL_WSDA_BASE_102_RS232 = 63071020,
+    MSCL_BASE_MODEL_WSDA_BASE_104_USB = 63071040,
+    MSCL_BASE_MODEL_WSI_104 = 63072000,
+    MSCL_BASE_MODEL_WSDA_BASE_MINI = 63079999
+} mscl_base_model;
 
 typedef enum mscl_button_command {
     MSCL_BUTTON_COMMAND_NODE_SLEEP = 0,
@@ -213,6 +258,12 @@ typedef struct mscl_device_info {
     uint32_t baud_rate;
     mscl_connection_type connection_type;
 } mscl_device_info;
+
+typedef struct mscl_version {
+    uint32_t major;
+    uint32_t minor;
+    uint32_t patch;
+} mscl_version;
 
 typedef struct mscl_beacon_status {
     bool enabled;
@@ -367,11 +418,40 @@ EXTERN_C mscl_status mscl_base_station_get_analog_pair(
     uint8_t port_number,
     mscl_base_station_analog_pair *pair
 );
+EXTERN_C mscl_status mscl_base_station_get_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency *frequency
+);
+EXTERN_C mscl_status mscl_base_station_get_firmware_version(
+    mscl_base_station *base_station,
+    mscl_version *version
+);
+EXTERN_C mscl_status mscl_base_station_get_model(
+    mscl_base_station *base_station,
+    mscl_base_model *model
+);
 /* Strings are truncated to fit their buffer, whose length is given. */
+EXTERN_C mscl_status mscl_base_station_get_serial(
+    mscl_base_station *base_station,
+    char *serial,
+    size_t serial_len
+);
 EXTERN_C mscl_status mscl_base_station_get_name(
     mscl_base_station *base_station,
     char *name,
     size_t name_len
+);
+EXTERN_C mscl_status mscl_base_station_get_microcontroller(
+    mscl_base_station *base_station,
+    mscl_microcontroller *microcontroller
+);
+EXTERN_C mscl_status mscl_base_station_get_region_code(
+    mscl_base_station *base_station,
+    mscl_region_code *region_code
+);
+EXTERN_C mscl_status mscl_base_station_change_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency frequency
 );
 /*
  * Sweeps collected since the last call, waiting up to timeout_ms for the

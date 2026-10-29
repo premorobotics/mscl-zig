@@ -4,11 +4,14 @@ const root = @import("root.zig");
 const BaseStation = @This();
 pub const Config = @import("BaseStation/Config.zig");
 pub const Features = @import("BaseStation/Features.zig");
+pub const State = @import("BaseStation/State.zig");
 
 handle: *root.mscl.mscl_base_station,
 /// Contains information on which features are supported by this BaseStation;
 /// null when MSCL does not support its model.
 features: ?Features,
+/// Information read from this BaseStation when it is initialized.
+state: State,
 
 pub const Error = error{
     Connection,
@@ -18,6 +21,24 @@ pub const Error = error{
     InvalidConfig,
     /// Any other failure; `root.mscl.mscl_last_error()` describes it.
     MsclFailure,
+};
+
+/// The model numbers for each of the Wireless Base Stations
+pub const Model = enum(root.mscl.mscl_base_model) {
+    wsda_1000 = root.mscl.MSCL_BASE_MODEL_WSDA_1000,
+    wsda_1500 = root.mscl.MSCL_BASE_MODEL_WSDA_1500,
+    wsda_2000 = root.mscl.MSCL_BASE_MODEL_WSDA_2000,
+    wsda_pro = root.mscl.MSCL_BASE_MODEL_WSDA_PRO,
+    wsda_base_200_legacy = root.mscl.MSCL_BASE_MODEL_WSDA_BASE_200_LEGACY,
+    wsda_base_200 = root.mscl.MSCL_BASE_MODEL_WSDA_BASE_200,
+    wsda_base_200_ext_antenna =
+        root.mscl.MSCL_BASE_MODEL_WSDA_BASE_200_EXT_ANTENNA,
+    wsda_base_101_analog = root.mscl.MSCL_BASE_MODEL_WSDA_BASE_101_ANALOG,
+    wsda_base_102_rs232 = root.mscl.MSCL_BASE_MODEL_WSDA_BASE_102_RS232,
+    wsda_base_104_usb = root.mscl.MSCL_BASE_MODEL_WSDA_BASE_104_USB,
+    wsi_104 = root.mscl.MSCL_BASE_MODEL_WSI_104,
+    wsda_base_mini = root.mscl.MSCL_BASE_MODEL_WSDA_BASE_MINI,
+    _,
 };
 
 /// Represents a single button on a BaseStation
@@ -83,20 +104,36 @@ pub fn init(
             return Error.MsclFailure;
         },
     }
-    errdefer root.mscl.mscl_base_station_close(handle.?);
-    const features = Features.init(gpa, handle.?) catch |err| switch (err) {
-        // The BaseStation model is not supported by MSCL.
-        Features.Error.NotSupported => null,
-        else => |e| {
-            return e;
-        },
+    var result: BaseStation = .{
+        .handle = handle.?,
+        .features = null,
+        .state = std.mem.zeroInit(State, .{}),
     };
-    return .{ .handle = handle.?, .features = features };
+    errdefer result.deinit(gpa);
+
+    result.features =
+        Features.init(gpa, result.handle) catch |err| switch (err) {
+            // The BaseStation model is not supported by MSCL.
+            Features.Error.NotSupported => null,
+            else => |e| {
+                return e;
+            },
+        };
+    result.state.model = try result.model();
+    result.state.serial = try result.serial(gpa);
+    result.state.name = try result.name(gpa);
+    result.state.firmware_version = try result.firmwareVersion();
+    result.state.microcontroller = try result.microcontroller();
+    result.state.region_code = try result.regionCode();
+    result.state.frequency = try result.frequency();
+    result.state.beacon_status = try result.beaconStatus();
+    return result;
 }
 
 /// Disconnects the port. Deinitialize everything using this base station
 /// first.
 pub fn deinit(self: BaseStation, gpa: std.mem.Allocator) void {
+    self.state.deinit(gpa);
     if (self.features) |features| {
         features.deinit(gpa);
     }
@@ -143,125 +180,113 @@ pub fn getRetries(self: BaseStation) u8 {
 
 /// Enables the beacon on the base station using the system time (UTC) as its
 /// starting timestamp.
-pub fn enableBeacon(self: BaseStation) Error!u64 {
+/// Updates `state.beacon_status`.
+pub fn enableBeacon(self: *BaseStation) Error!u64 {
     var beacon_time_ns: u64 = 0;
     const status = root.mscl.mscl_base_station_enable_beacon(
         self.handle,
         &beacon_time_ns,
     );
-    return switch (status) {
-        root.mscl.MSCL_OK => beacon_time_ns,
+    switch (status) {
+        root.mscl.MSCL_OK => {},
         // A connection error has occurred with the BaseStation
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        // The enable beacon command has failed.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
+        root.mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
         },
-    };
+        // The enable beacon command has failed.
+        root.mscl.MSCL_ERROR_COMMUNICATION => {
+            return Error.Communication;
+        },
+        else => {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    self.state.beacon_status = try self.beaconStatus();
+    return beacon_time_ns;
 }
 
 /// Enables the beacon on the base station using the given UTC timestamp.
-pub fn enableBeaconAt(self: BaseStation, utc_time_s: u32) Error!u64 {
+/// Updates `state.beacon_status`.
+pub fn enableBeaconAt(self: *BaseStation, utc_time_s: u32) Error!u64 {
     var beacon_time_ns: u64 = 0;
     const status = root.mscl.mscl_base_station_enable_beacon_at(
         self.handle,
         utc_time_s,
         &beacon_time_ns,
     );
-    return switch (status) {
-        root.mscl.MSCL_OK => beacon_time_ns,
+    switch (status) {
+        root.mscl.MSCL_OK => {},
         // A connection error has occurred with the BaseStation
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        // The enable beacon command has failed.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
+        root.mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
         },
-    };
+        // The enable beacon command has failed.
+        root.mscl.MSCL_ERROR_COMMUNICATION => {
+            return Error.Communication;
+        },
+        else => {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    self.state.beacon_status = try self.beaconStatus();
+    return beacon_time_ns;
 }
 
 /// Disables the beacon on the base station.
-pub fn disableBeacon(self: BaseStation) Error!void {
+/// Updates `state.beacon_status`.
+pub fn disableBeacon(self: *BaseStation) Error!void {
     const status = root.mscl.mscl_base_station_disable_beacon(self.handle);
-    return switch (status) {
+    switch (status) {
         root.mscl.MSCL_OK => {},
         // A connection error has occurred with the BaseStation
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        root.mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
+        },
         // The disable beacon command has failed.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
+        root.mscl.MSCL_ERROR_COMMUNICATION => {
+            return Error.Communication;
         },
-    };
+        else => {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    self.state.beacon_status = try self.beaconStatus();
 }
 
-/// Gets the BeaconStatus of the beacon on the base station.
-pub fn getBeaconStatus(self: BaseStation) Error!BeaconStatus {
-    var beacon_status: root.mscl.mscl_beacon_status = undefined;
-    const status = root.mscl.mscl_base_station_get_beacon_status(
+/// Changes the radio frequency of the base station.
+/// Updates `state.frequency`.
+pub fn changeFrequency(
+    self: *BaseStation,
+    new_frequency: root.Frequency,
+) Error!void {
+    const status = root.mscl.mscl_base_station_change_frequency(
         self.handle,
-        &beacon_status,
+        @backingInt(new_frequency),
     );
-    return switch (status) {
-        root.mscl.MSCL_OK => .{
-            .enabled = beacon_status.enabled,
-            .timestamp_ns = beacon_status.timestamp_ns,
-        },
-        // Beacon Status is not supported by this BaseStation.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
-        // Failed to get the beacon status.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        // A connection error has occurred with the BaseStation.
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
-        },
-    };
-}
-
-/// Gets the name of the BaseStation. This is the universal basestation name
-/// that should be used for SensorCloud.
-/// This is the same as calling BaseStation::deviceName.
-/// The name is written into `buffer`, truncated to fit.
-pub fn name(self: BaseStation, buffer: []u8) Error![]u8 {
-    const status = root.mscl.mscl_base_station_get_name(
-        self.handle,
-        buffer.ptr,
-        buffer.len,
-    );
-    return switch (status) {
-        root.mscl.MSCL_OK => std.mem.sliceTo(buffer, 0),
-        // Attempted to read an unsupported option. The device firmware is not
+    switch (status) {
+        root.mscl.MSCL_OK => {},
+        // Attempted to write an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
-        // Failed to read the value from the BaseStation.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        // A connection error has occurred with the parent BaseStation.
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => {
+            return Error.NotSupported;
         },
-    };
-}
-
-/// Gets the name of the BaseStation. This is the universal basestation name
-/// that should be used for SensorCloud.
-/// This is the same as calling BaseStation::deviceName.
-/// Free the result with `gpa.free`.
-pub fn nameAlloc(
-    self: BaseStation,
-    gpa: std.mem.Allocator,
-) (Error || std.mem.Allocator.Error)![]u8 {
-    // MSCL's name is "base-" and the serial, at most 5 + 21 characters, so it
-    // always fits.
-    var buffer: [32]u8 = undefined;
-    return gpa.dupe(u8, try self.name(&buffer));
+        // A connection error has occurred with the BaseStation
+        root.mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
+        },
+        // Failed to change the frequency.
+        root.mscl.MSCL_ERROR_COMMUNICATION => {
+            return Error.Communication;
+        },
+        else => {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    self.state.frequency = try self.frequency();
 }
 
 /// Reads every setting that a BaseStationConfig can hold from the
@@ -631,6 +656,208 @@ fn getCommunicationProtocol(self: BaseStation) Error!root.CommProtocol {
     return switch (status) {
         root.mscl.MSCL_OK => @fromBackingInt(protocol),
         // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the model of the BaseStation.
+fn model(self: BaseStation) Error!?Model {
+    var value: root.mscl.mscl_base_model = 0;
+    const status = root.mscl.mscl_base_station_get_model(self.handle, &value);
+    return switch (status) {
+        root.mscl.MSCL_OK => @as(Model, @fromBackingInt(value)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the serial number of the BaseStation.
+fn serial(
+    self: BaseStation,
+    gpa: std.mem.Allocator,
+) (Error || std.mem.Allocator.Error)!?[]const u8 {
+    // MSCL's serial is "model-class-number", at most 5 + 1 + 4 + 1 + 10
+    // characters, so it always fits.
+    var buffer: [32]u8 = undefined;
+    const status = root.mscl.mscl_base_station_get_serial(
+        self.handle,
+        &buffer,
+        buffer.len,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => try gpa.dupe(u8, std.mem.sliceTo(&buffer, 0)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the name of the BaseStation. This is the universal basestation name
+/// that should be used for SensorCloud.
+/// This is the same as calling BaseStation::deviceName.
+fn name(
+    self: BaseStation,
+    gpa: std.mem.Allocator,
+) (Error || std.mem.Allocator.Error)!?[]const u8 {
+    // MSCL's name is "base-" and the serial, at most 5 + 21 characters, so it
+    // always fits.
+    var buffer: [32]u8 = undefined;
+    const status = root.mscl.mscl_base_station_get_name(
+        self.handle,
+        &buffer,
+        buffer.len,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => try gpa.dupe(u8, std.mem.sliceTo(&buffer, 0)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the firmware version of the BaseStation.
+fn firmwareVersion(self: BaseStation) Error!?std.SemanticVersion {
+    var version: root.mscl.mscl_version = undefined;
+    const status = root.mscl.mscl_base_station_get_firmware_version(
+        self.handle,
+        &version,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .major = version.major,
+            .minor = version.minor,
+            .patch = version.patch,
+        },
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the microcontroller of the BaseStation.
+fn microcontroller(self: BaseStation) Error!?root.Microcontroller {
+    var value: root.mscl.mscl_microcontroller = 0;
+    const status = root.mscl.mscl_base_station_get_microcontroller(
+        self.handle,
+        &value,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => @as(root.Microcontroller, @fromBackingInt(value)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the region code currently set on the BaseStation.
+fn regionCode(self: BaseStation) Error!?root.RegionCode {
+    var region_code: root.mscl.mscl_region_code = 0;
+    const status = root.mscl.mscl_base_station_get_region_code(
+        self.handle,
+        &region_code,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => @as(root.RegionCode, @fromBackingInt(region_code)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the WirelessTypes::Frequency representing the radio frequency of this
+/// BaseStation.
+fn frequency(self: BaseStation) Error!?root.Frequency {
+    var value: root.mscl.mscl_frequency = 0;
+    const status = root.mscl.mscl_base_station_get_frequency(
+        self.handle,
+        &value,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => @as(root.Frequency, @fromBackingInt(value)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the BeaconStatus of the beacon on the base station.
+fn beaconStatus(self: BaseStation) Error!?BeaconStatus {
+    var beacon_status: root.mscl.mscl_beacon_status = undefined;
+    const status = root.mscl.mscl_base_station_get_beacon_status(
+        self.handle,
+        &beacon_status,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .enabled = beacon_status.enabled,
+            .timestamp_ns = beacon_status.timestamp_ns,
+        },
+        // Beacon Status is not supported by this BaseStation.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to get the beacon status.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the BaseStation.
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,

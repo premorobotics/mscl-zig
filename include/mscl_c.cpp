@@ -223,6 +223,24 @@ MSCL_C_SAME(
 );
 MSCL_C_SAME(MSCL_CONNECTION_TYPE_TCP, mscl::DeviceInfo::connectionType_tcp);
 
+MSCL_C_SAME(MSCL_FREQUENCY_UNKNOWN, WirelessTypes::freq_unknown);
+MSCL_C_SAME(MSCL_FREQUENCY_11, WirelessTypes::freq_11);
+MSCL_C_SAME(MSCL_FREQUENCY_12, WirelessTypes::freq_12);
+MSCL_C_SAME(MSCL_FREQUENCY_13, WirelessTypes::freq_13);
+MSCL_C_SAME(MSCL_FREQUENCY_14, WirelessTypes::freq_14);
+MSCL_C_SAME(MSCL_FREQUENCY_15, WirelessTypes::freq_15);
+MSCL_C_SAME(MSCL_FREQUENCY_16, WirelessTypes::freq_16);
+MSCL_C_SAME(MSCL_FREQUENCY_17, WirelessTypes::freq_17);
+MSCL_C_SAME(MSCL_FREQUENCY_18, WirelessTypes::freq_18);
+MSCL_C_SAME(MSCL_FREQUENCY_19, WirelessTypes::freq_19);
+MSCL_C_SAME(MSCL_FREQUENCY_20, WirelessTypes::freq_20);
+MSCL_C_SAME(MSCL_FREQUENCY_21, WirelessTypes::freq_21);
+MSCL_C_SAME(MSCL_FREQUENCY_22, WirelessTypes::freq_22);
+MSCL_C_SAME(MSCL_FREQUENCY_23, WirelessTypes::freq_23);
+MSCL_C_SAME(MSCL_FREQUENCY_24, WirelessTypes::freq_24);
+MSCL_C_SAME(MSCL_FREQUENCY_25, WirelessTypes::freq_25);
+MSCL_C_SAME(MSCL_FREQUENCY_26, WirelessTypes::freq_26);
+
 MSCL_C_SAME(MSCL_COMM_PROTOCOL_LXRS, WirelessTypes::commProtocol_lxrs);
 MSCL_C_SAME(
     MSCL_COMM_PROTOCOL_LXRS_PLUS,
@@ -247,6 +265,69 @@ MSCL_C_SAME(MSCL_REGION_CODE_CANADA, WirelessTypes::region_canada);
 MSCL_C_SAME(MSCL_REGION_CODE_SOUTH_AFRICA, WirelessTypes::region_southAfrica);
 MSCL_C_SAME(MSCL_REGION_CODE_INDONESIA, WirelessTypes::region_indonesia);
 MSCL_C_SAME(MSCL_REGION_CODE_TAIWAN, WirelessTypes::region_taiwan);
+
+MSCL_C_SAME(
+    MSCL_MICROCONTROLLER_18F452,
+    WirelessTypes::microcontroller_18F452
+);
+MSCL_C_SAME(
+    MSCL_MICROCONTROLLER_18F4620,
+    WirelessTypes::microcontroller_18F4620
+);
+MSCL_C_SAME(
+    MSCL_MICROCONTROLLER_18F46K20,
+    WirelessTypes::microcontroller_18F46K20
+);
+MSCL_C_SAME(
+    MSCL_MICROCONTROLLER_18F67K90,
+    WirelessTypes::microcontroller_18F67K90
+);
+MSCL_C_SAME(
+    MSCL_MICROCONTROLLER_EFM32WG990F256,
+    WirelessTypes::microcontroller_EFM32WG990F256
+);
+MSCL_C_SAME(
+    MSCL_MICROCONTROLLER_EFR32FG1P132F256GM48,
+    WirelessTypes::microcontroller_EFR32FG1P132F256GM48
+);
+MSCL_C_SAME(
+    MSCL_MICROCONTROLLER_EFR32MG1P232F256GM48,
+    WirelessTypes::microcontroller_EFR32MG1P232F256GM48
+);
+
+MSCL_C_SAME(MSCL_BASE_MODEL_WSDA_1000, mscl::WirelessModels::base_wsda_1000);
+MSCL_C_SAME(MSCL_BASE_MODEL_WSDA_1500, mscl::WirelessModels::base_wsda_1500);
+MSCL_C_SAME(MSCL_BASE_MODEL_WSDA_2000, mscl::WirelessModels::base_wsda_2000);
+MSCL_C_SAME(MSCL_BASE_MODEL_WSDA_PRO, mscl::WirelessModels::base_wsdaPro);
+MSCL_C_SAME(
+    MSCL_BASE_MODEL_WSDA_BASE_200_LEGACY,
+    mscl::WirelessModels::base_wsdaBase_200_legacy
+);
+MSCL_C_SAME(
+    MSCL_BASE_MODEL_WSDA_BASE_200,
+    mscl::WirelessModels::base_wsdaBase_200
+);
+MSCL_C_SAME(
+    MSCL_BASE_MODEL_WSDA_BASE_200_EXT_ANTENNA,
+    mscl::WirelessModels::base_wsdaBase_200_extAntenna
+);
+MSCL_C_SAME(
+    MSCL_BASE_MODEL_WSDA_BASE_101_ANALOG,
+    mscl::WirelessModels::base_wsdaBase_101_analog
+);
+MSCL_C_SAME(
+    MSCL_BASE_MODEL_WSDA_BASE_102_RS232,
+    mscl::WirelessModels::base_wsdaBase_102_rs232
+);
+MSCL_C_SAME(
+    MSCL_BASE_MODEL_WSDA_BASE_104_USB,
+    mscl::WirelessModels::base_wsdaBase_104_usb
+);
+MSCL_C_SAME(MSCL_BASE_MODEL_WSI_104, mscl::WirelessModels::base_wsi_104);
+MSCL_C_SAME(
+    MSCL_BASE_MODEL_WSDA_BASE_MINI,
+    mscl::WirelessModels::base_wsdaBase_mini
+);
 
 MSCL_C_SAME(
     MSCL_BUTTON_COMMAND_NODE_SLEEP,
@@ -744,6 +825,64 @@ mscl_status mscl_base_station_get_analog_pair(
     });
 }
 
+mscl_status mscl_base_station_get_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency *frequency
+)
+{
+    if (base_station == nullptr || frequency == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *frequency =
+            static_cast<mscl_frequency>(base_station->base.frequency());
+    });
+}
+
+mscl_status mscl_base_station_get_firmware_version(
+    mscl_base_station *base_station,
+    mscl_version *version
+)
+{
+    if (base_station == nullptr || version == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::Version firmware = base_station->base.firmwareVersion();
+        version->major = firmware.majorPart();
+        version->minor = firmware.minorPart();
+        version->patch = firmware.patchPart();
+    });
+}
+
+mscl_status mscl_base_station_get_model(
+    mscl_base_station *base_station,
+    mscl_base_model *model
+)
+{
+    if (base_station == nullptr || model == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *model = static_cast<mscl_base_model>(base_station->base.model());
+    });
+}
+
+mscl_status mscl_base_station_get_serial(
+    mscl_base_station *base_station,
+    char *serial,
+    size_t serial_len
+)
+{
+    if (base_station == nullptr || serial == nullptr) {
+        return fail_null(__func__);
+    }
+    copy_string(serial, serial_len, "");
+    return call([&] {
+        copy_string(serial, serial_len, base_station->base.serial());
+    });
+}
+
 mscl_status mscl_base_station_get_name(
     mscl_base_station *base_station,
     char *name,
@@ -756,6 +895,50 @@ mscl_status mscl_base_station_get_name(
     copy_string(name, name_len, "");
     return call([&] {
         copy_string(name, name_len, base_station->base.name());
+    });
+}
+
+mscl_status mscl_base_station_get_microcontroller(
+    mscl_base_station *base_station,
+    mscl_microcontroller *microcontroller
+)
+{
+    if (base_station == nullptr || microcontroller == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *microcontroller = static_cast<mscl_microcontroller>(
+            base_station->base.microcontroller()
+        );
+    });
+}
+
+mscl_status mscl_base_station_get_region_code(
+    mscl_base_station *base_station,
+    mscl_region_code *region_code
+)
+{
+    if (base_station == nullptr || region_code == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *region_code =
+            static_cast<mscl_region_code>(base_station->base.regionCode());
+    });
+}
+
+mscl_status mscl_base_station_change_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency frequency
+)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        base_station->base.changeFrequency(
+            static_cast<WirelessTypes::Frequency>(frequency)
+        );
     });
 }
 
