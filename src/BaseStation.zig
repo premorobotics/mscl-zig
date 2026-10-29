@@ -97,15 +97,21 @@ pub const BeaconStatus = struct {
     timestamp_ns: u64,
 };
 
-/// Opens the base station on `port`. USB base stations use a baud rate of
-/// 3000000.
+/// Opens the base station on `port`.
 pub fn init(
     gpa: std.mem.Allocator,
     port: [*:0]const u8,
-    baud_rate: u32,
+    option: struct {
+        /// The default is the baud rate that USB base stations use.
+        baud_rate: u32 = 3000000,
+    },
 ) (Error || Features.Error || std.mem.Allocator.Error)!BaseStation {
     var handle: ?*root.mscl.mscl_base_station = null;
-    const status = root.mscl.mscl_base_station_open(port, baud_rate, &handle);
+    const status = root.mscl.mscl_base_station_open(
+        port,
+        option.baud_rate,
+        &handle,
+    );
     switch (status) {
         root.mscl.MSCL_OK => {},
         // Failed to get or set com port parameters.

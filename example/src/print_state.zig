@@ -25,7 +25,7 @@ pub fn main(init: std.process.Init) !void {
     const base_station = mscl_zig.BaseStation.init(
         init.gpa,
         port,
-        device.baud_rate,
+        .{ .baud_rate = device.baud_rate },
     ) catch |err| {
         std.log.err("{t}: {s}", .{ err, mscl_zig.mscl.mscl_last_error() });
         return err;
