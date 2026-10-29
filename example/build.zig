@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "list_base_stations",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("list_base_stations.zig"),
+            .root_source_file = b.path("src/list_base_stations.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{
@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     const features_exe = b.addExecutable(.{
         .name = "print_features",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("print_features.zig"),
+            .root_source_file = b.path("src/print_features.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{

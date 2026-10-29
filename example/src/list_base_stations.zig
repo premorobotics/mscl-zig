@@ -18,7 +18,7 @@ pub fn main(init: std.process.Init) !void {
     }
     for (base_stations.devices) |device| {
         const connection_type: mscl_zig.ConnectionType =
-            @enumFromInt(device.connection_type);
+            @fromBackingInt(device.connection_type);
         try stdout.print(
             \\{s}
             \\  description: {s}
