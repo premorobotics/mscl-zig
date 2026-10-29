@@ -68,12 +68,13 @@ pub fn deinit(self: BaseStation) void {
     root.mscl.mscl_base_station_close(self.handle);
 }
 
-/// Returns whether the base station answered.
+/// Pings the base station
 pub fn ping(self: BaseStation) Error!bool {
     var success = false;
     const status = root.mscl.mscl_base_station_ping(self.handle, &success);
     return switch (status) {
         root.mscl.MSCL_OK => true,
+        // A connection error has occurred with the BaseStation
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         else => mscl: {
             std.log.err("{s}", .{root.mscl.mscl_last_error()});
@@ -82,8 +83,11 @@ pub fn ping(self: BaseStation) Error!bool {
     };
 }
 
-/// Sets how many times reading or writing a config option is retried; MSCL
-/// starts at 0. The timeout applies to each attempt.
+/// Sets the number of retry attempts for reading and writing config options on
+/// the BaseStation. By default, the number of retries is 0.
+/// Note: The timeout that is set per command will be per read and write
+/// attempt, meaning this retry number is multiplied by the timeout for your
+/// overall timeout.
 pub fn setRetries(self: BaseStation, retries: u8) void {
     _ = root.mscl.mscl_base_station_set_retries(
         self.handle,
@@ -91,7 +95,11 @@ pub fn setRetries(self: BaseStation, retries: u8) void {
     );
 }
 
-/// Returns how many times reading or writing a config option is retried.
+/// Gets the number of retry attempts for reading and writing config options on
+/// the BaseStation. By default, the number of retries is 0.
+/// Note: The timeout that is set per command will be per read and write
+/// attempt, meaning this retry number is multiplied by the timeout for your
+/// overall timeout.
 pub fn getRetries(self: BaseStation) u8 {
     var retries: u8 = 0;
     _ = root.mscl.mscl_base_station_get_retries(self.handle, &retries);
