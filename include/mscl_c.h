@@ -165,6 +165,26 @@ typedef enum mscl_connection_type {
     MSCL_CONNECTION_TYPE_TCP = 1
 } mscl_connection_type;
 
+typedef enum mscl_comm_protocol {
+    MSCL_COMM_PROTOCOL_LXRS = 0,
+    MSCL_COMM_PROTOCOL_LXRS_PLUS = 1
+} mscl_comm_protocol;
+
+typedef enum mscl_region_code {
+    MSCL_REGION_CODE_USA = 0,
+    MSCL_REGION_CODE_EUROPEAN_UNION = 1,
+    MSCL_REGION_CODE_JAPAN = 2,
+    MSCL_REGION_CODE_OTHER = 3,
+    MSCL_REGION_CODE_BRAZIL = 4,
+    MSCL_REGION_CODE_CHINA = 5,
+    MSCL_REGION_CODE_AUSTRALIA_NEW_ZEALAND = 6,
+    MSCL_REGION_CODE_SINGAPORE = 7,
+    MSCL_REGION_CODE_CANADA = 8,
+    MSCL_REGION_CODE_SOUTH_AFRICA = 9,
+    MSCL_REGION_CODE_INDONESIA = 10,
+    MSCL_REGION_CODE_TAIWAN = 11
+} mscl_region_code;
+
 typedef enum mscl_button_command {
     MSCL_BUTTON_COMMAND_NODE_SLEEP = 0,
     MSCL_BUTTON_COMMAND_NODE_STOP = 1,
@@ -182,6 +202,7 @@ typedef struct mscl_node mscl_node;
 typedef struct mscl_node_config mscl_node_config;
 typedef struct mscl_sync_network mscl_sync_network;
 typedef struct mscl_datalog_downloader mscl_datalog_downloader;
+typedef struct mscl_base_station_features mscl_base_station_features;
 
 typedef struct mscl_device_info {
     /* The key MSCL lists the device under. */
@@ -326,6 +347,89 @@ EXTERN_C mscl_status mscl_base_station_get_data(
     size_t *count
 );
 EXTERN_C void mscl_sweeps_free(mscl_sweep *sweeps, size_t count);
+/* Owned by the base station; valid until it is closed. */
+EXTERN_C mscl_status mscl_base_station_get_features(
+    mscl_base_station *base_station,
+    const mscl_base_station_features **features
+);
+
+/*
+ * Lists are truncated to fit their buffer, whose length is given; *count is
+ * the number written.
+ */
+EXTERN_C mscl_status mscl_base_station_features_supports_transmit_power(
+    const mscl_base_station_features *features,
+    mscl_transmit_power power,
+    mscl_comm_protocol comm_protocol,
+    bool *supported
+);
+EXTERN_C mscl_status
+mscl_base_station_features_supports_communication_protocol(
+    const mscl_base_station_features *features,
+    mscl_comm_protocol protocol,
+    bool *supported
+);
+EXTERN_C mscl_status mscl_base_station_features_supports_buttons(
+    const mscl_base_station_features *features,
+    bool *supported
+);
+EXTERN_C mscl_status mscl_base_station_features_supports_analog_pairing(
+    const mscl_base_station_features *features,
+    bool *supported
+);
+EXTERN_C mscl_status mscl_base_station_features_supports_beacon_status(
+    const mscl_base_station_features *features,
+    bool *supported
+);
+EXTERN_C mscl_status mscl_base_station_features_supports_rf_sweep_mode(
+    const mscl_base_station_features *features,
+    bool *supported
+);
+EXTERN_C mscl_status mscl_base_station_features_supports_custom_rf_sweep_mode(
+    const mscl_base_station_features *features,
+    bool *supported
+);
+EXTERN_C mscl_status mscl_base_station_features_get_button_count(
+    const mscl_base_station_features *features,
+    uint8_t *count
+);
+EXTERN_C mscl_status mscl_base_station_features_get_analog_port_count(
+    const mscl_base_station_features *features,
+    uint8_t *count
+);
+EXTERN_C mscl_status mscl_base_station_features_get_transmit_powers(
+    const mscl_base_station_features *features,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *powers,
+    size_t powers_len,
+    size_t *count
+);
+EXTERN_C mscl_status mscl_base_station_features_get_region_transmit_powers(
+    const mscl_base_station_features *features,
+    mscl_region_code region,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *powers,
+    size_t powers_len,
+    size_t *count
+);
+EXTERN_C mscl_status mscl_base_station_features_get_comm_protocols(
+    const mscl_base_station_features *features,
+    mscl_comm_protocol *protocols,
+    size_t protocols_len,
+    size_t *count
+);
+EXTERN_C mscl_status mscl_base_station_features_get_max_transmit_power(
+    const mscl_base_station_features *features,
+    mscl_region_code region,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *power
+);
+EXTERN_C mscl_status mscl_base_station_features_get_min_transmit_power(
+    const mscl_base_station_features *features,
+    mscl_region_code region,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *power
+);
 
 EXTERN_C mscl_status mscl_node_create(
     mscl_base_station *base_station,

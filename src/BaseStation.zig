@@ -2,8 +2,12 @@ const std = @import("std");
 const root = @import("root.zig");
 
 const BaseStation = @This();
+pub const Features = @import("BaseStation/Features.zig");
 
 handle: *root.mscl.mscl_base_station,
+/// Contains information on which features are supported by this BaseStation;
+/// null when MSCL does not support its model.
+features: ?Features,
 
 pub const Error = error{
     Connection,
@@ -46,25 +50,45 @@ pub const BeaconStatus = struct {
 
 /// Opens the base station on `port`. USB base stations use a baud rate of
 /// 3000000.
-pub fn init(port: [*:0]const u8, baud_rate: u32) Error!BaseStation {
+pub fn init(
+    gpa: std.mem.Allocator,
+    port: [*:0]const u8,
+    baud_rate: u32,
+) (Error || Features.Error || std.mem.Allocator.Error)!BaseStation {
     var handle: ?*root.mscl.mscl_base_station = null;
     const status = root.mscl.mscl_base_station_open(port, baud_rate, &handle);
-    return switch (status) {
-        root.mscl.MSCL_OK => .{ .handle = handle.? },
+    switch (status) {
+        root.mscl.MSCL_OK => {},
         // Failed to get or set com port parameters.
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        root.mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
+        },
         // The specified com port is invalid.
-        root.mscl.MSCL_ERROR_INVALID_SERIAL_PORT => Error.InvalidSerialPort,
-        else => mscl: {
+        root.mscl.MSCL_ERROR_INVALID_SERIAL_PORT => {
+            return Error.InvalidSerialPort;
+        },
+        else => {
             std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
+            return Error.MsclFailure;
+        },
+    }
+    errdefer root.mscl.mscl_base_station_close(handle.?);
+    const features = Features.init(gpa, handle.?) catch |err| switch (err) {
+        // The BaseStation model is not supported by MSCL.
+        Features.Error.NotSupported => null,
+        else => |e| {
+            return e;
         },
     };
+    return .{ .handle = handle.?, .features = features };
 }
 
 /// Disconnects the port. Deinitialize everything using this base station
 /// first.
-pub fn deinit(self: BaseStation) void {
+pub fn deinit(self: BaseStation, gpa: std.mem.Allocator) void {
+    if (self.features) |features| {
+        features.deinit(gpa);
+    }
     root.mscl.mscl_base_station_close(self.handle);
 }
 

@@ -14,6 +14,7 @@
 #include "mscl/MicroStrain/Wireless/Configuration/ConfigIssue.h"
 #include "mscl/MicroStrain/Wireless/Configuration/WirelessNodeConfig.h"
 #include "mscl/MicroStrain/Wireless/DatalogDownloader.h"
+#include "mscl/MicroStrain/Wireless/Features/BaseStationFeatures.h"
 #include "mscl/MicroStrain/Wireless/SyncSamplingNetwork.h"
 #include "mscl/MicroStrain/Wireless/WirelessNode.h"
 
@@ -25,6 +26,7 @@
 #include <limits>
 #include <new>
 #include <string>
+#include <vector>
 
 struct mscl_base_station {
     explicit mscl_base_station(mscl::Connection& connection)
@@ -216,6 +218,31 @@ MSCL_C_SAME(
 );
 MSCL_C_SAME(MSCL_CONNECTION_TYPE_TCP, mscl::DeviceInfo::connectionType_tcp);
 
+MSCL_C_SAME(MSCL_COMM_PROTOCOL_LXRS, WirelessTypes::commProtocol_lxrs);
+MSCL_C_SAME(
+    MSCL_COMM_PROTOCOL_LXRS_PLUS,
+    WirelessTypes::commProtocol_lxrsPlus
+);
+
+MSCL_C_SAME(MSCL_REGION_CODE_USA, WirelessTypes::region_usa);
+MSCL_C_SAME(
+    MSCL_REGION_CODE_EUROPEAN_UNION,
+    WirelessTypes::region_europeanUnion
+);
+MSCL_C_SAME(MSCL_REGION_CODE_JAPAN, WirelessTypes::region_japan);
+MSCL_C_SAME(MSCL_REGION_CODE_OTHER, WirelessTypes::region_other);
+MSCL_C_SAME(MSCL_REGION_CODE_BRAZIL, WirelessTypes::region_brazil);
+MSCL_C_SAME(MSCL_REGION_CODE_CHINA, WirelessTypes::region_china);
+MSCL_C_SAME(
+    MSCL_REGION_CODE_AUSTRALIA_NEW_ZEALAND,
+    WirelessTypes::region_australia_newzealand
+);
+MSCL_C_SAME(MSCL_REGION_CODE_SINGAPORE, WirelessTypes::region_singapore);
+MSCL_C_SAME(MSCL_REGION_CODE_CANADA, WirelessTypes::region_canada);
+MSCL_C_SAME(MSCL_REGION_CODE_SOUTH_AFRICA, WirelessTypes::region_southAfrica);
+MSCL_C_SAME(MSCL_REGION_CODE_INDONESIA, WirelessTypes::region_indonesia);
+MSCL_C_SAME(MSCL_REGION_CODE_TAIWAN, WirelessTypes::region_taiwan);
+
 MSCL_C_SAME(
     MSCL_BUTTON_COMMAND_NODE_SLEEP,
     mscl::BaseStationButton::btn_nodeSleep
@@ -386,6 +413,27 @@ void fill_sweep(const mscl::DataSweep &data, mscl_sweep &sweep)
     sweep.node_rssi = data.nodeRssi();
     sweep.cal_applied = data.calApplied();
     fill_points(data.data(), sweep);
+}
+
+// mscl_base_station_features is never defined: a handle points at the
+// BaseStationFeatures that the base station owns.
+const mscl::BaseStationFeatures &features_of(
+    const mscl_base_station_features *features
+)
+{
+    return *reinterpret_cast<const mscl::BaseStationFeatures *>(features);
+}
+
+// Copies as many of `values` as fit into `destination` and returns how many
+// it copied.
+template <typename C, typename T>
+size_t copy_values(C *destination, size_t size, const std::vector<T> &values)
+{
+    const size_t count = std::min(values.size(), size);
+    for (size_t i = 0; i < count; i++) {
+        destination[i] = static_cast<C>(values[i]);
+    }
+    return count;
 }
 
 } // namespace
@@ -646,6 +694,251 @@ void mscl_sweeps_free(mscl_sweep *sweeps, size_t count)
         std::free(sweeps[i].points);
     }
     std::free(sweeps);
+}
+
+mscl_status mscl_base_station_get_features(
+    mscl_base_station *base_station,
+    const mscl_base_station_features **features
+)
+{
+    if (base_station == nullptr || features == nullptr) {
+        return fail_null(__func__);
+    }
+    *features = nullptr;
+    return call([&] {
+        *features = reinterpret_cast<const mscl_base_station_features *>(
+            &base_station->base.features()
+        );
+    });
+}
+
+mscl_status mscl_base_station_features_supports_transmit_power(
+    const mscl_base_station_features *features,
+    mscl_transmit_power power,
+    mscl_comm_protocol comm_protocol,
+    bool *supported
+)
+{
+    if (features == nullptr || supported == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *supported = features_of(features).supportsTransmitPower(
+            static_cast<WirelessTypes::TransmitPower>(power),
+            static_cast<WirelessTypes::CommProtocol>(comm_protocol)
+        );
+    });
+}
+
+mscl_status mscl_base_station_features_supports_communication_protocol(
+    const mscl_base_station_features *features,
+    mscl_comm_protocol protocol,
+    bool *supported
+)
+{
+    if (features == nullptr || supported == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *supported = features_of(features).supportsCommunicationProtocol(
+            static_cast<WirelessTypes::CommProtocol>(protocol)
+        );
+    });
+}
+
+mscl_status mscl_base_station_features_supports_buttons(
+    const mscl_base_station_features *features,
+    bool *supported
+)
+{
+    if (features == nullptr || supported == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *supported = features_of(features).supportsButtons();
+    });
+}
+
+mscl_status mscl_base_station_features_supports_analog_pairing(
+    const mscl_base_station_features *features,
+    bool *supported
+)
+{
+    if (features == nullptr || supported == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *supported = features_of(features).supportsAnalogPairing();
+    });
+}
+
+mscl_status mscl_base_station_features_supports_beacon_status(
+    const mscl_base_station_features *features,
+    bool *supported
+)
+{
+    if (features == nullptr || supported == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *supported = features_of(features).supportsBeaconStatus();
+    });
+}
+
+mscl_status mscl_base_station_features_supports_rf_sweep_mode(
+    const mscl_base_station_features *features,
+    bool *supported
+)
+{
+    if (features == nullptr || supported == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *supported = features_of(features).supportsRfSweepMode();
+    });
+}
+
+mscl_status mscl_base_station_features_supports_custom_rf_sweep_mode(
+    const mscl_base_station_features *features,
+    bool *supported
+)
+{
+    if (features == nullptr || supported == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *supported = features_of(features).supportsCustomRfSweepMode();
+    });
+}
+
+mscl_status mscl_base_station_features_get_button_count(
+    const mscl_base_station_features *features,
+    uint8_t *count
+)
+{
+    if (features == nullptr || count == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *count = features_of(features).buttonCount(); });
+}
+
+mscl_status mscl_base_station_features_get_analog_port_count(
+    const mscl_base_station_features *features,
+    uint8_t *count
+)
+{
+    if (features == nullptr || count == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *count = features_of(features).analogPortCount(); });
+}
+
+mscl_status mscl_base_station_features_get_transmit_powers(
+    const mscl_base_station_features *features,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *powers,
+    size_t powers_len,
+    size_t *count
+)
+{
+    if (features == nullptr || powers == nullptr || count == nullptr) {
+        return fail_null(__func__);
+    }
+    *count = 0;
+    return call([&] {
+        *count = copy_values(
+            powers,
+            powers_len,
+            features_of(features).transmitPowers(
+                static_cast<WirelessTypes::CommProtocol>(comm_protocol)
+            )
+        );
+    });
+}
+
+mscl_status mscl_base_station_features_get_region_transmit_powers(
+    const mscl_base_station_features *features,
+    mscl_region_code region,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *powers,
+    size_t powers_len,
+    size_t *count
+)
+{
+    if (features == nullptr || powers == nullptr || count == nullptr) {
+        return fail_null(__func__);
+    }
+    *count = 0;
+    return call([&] {
+        *count = copy_values(
+            powers,
+            powers_len,
+            features_of(features).transmitPowers(
+                static_cast<WirelessTypes::RegionCode>(region),
+                static_cast<WirelessTypes::CommProtocol>(comm_protocol)
+            )
+        );
+    });
+}
+
+mscl_status mscl_base_station_features_get_comm_protocols(
+    const mscl_base_station_features *features,
+    mscl_comm_protocol *protocols,
+    size_t protocols_len,
+    size_t *count
+)
+{
+    if (features == nullptr || protocols == nullptr || count == nullptr) {
+        return fail_null(__func__);
+    }
+    *count = 0;
+    return call([&] {
+        *count = copy_values(
+            protocols,
+            protocols_len,
+            features_of(features).commProtocols()
+        );
+    });
+}
+
+mscl_status mscl_base_station_features_get_max_transmit_power(
+    const mscl_base_station_features *features,
+    mscl_region_code region,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *power
+)
+{
+    if (features == nullptr || power == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *power = static_cast<mscl_transmit_power>(
+            features_of(features).maxTransmitPower(
+                static_cast<WirelessTypes::RegionCode>(region),
+                static_cast<WirelessTypes::CommProtocol>(comm_protocol)
+            )
+        );
+    });
+}
+
+mscl_status mscl_base_station_features_get_min_transmit_power(
+    const mscl_base_station_features *features,
+    mscl_region_code region,
+    mscl_comm_protocol comm_protocol,
+    mscl_transmit_power *power
+)
+{
+    if (features == nullptr || power == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *power = static_cast<mscl_transmit_power>(
+            features_of(features).minTransmitPower(
+                static_cast<WirelessTypes::RegionCode>(region),
+                static_cast<WirelessTypes::CommProtocol>(comm_protocol)
+            )
+        );
+    });
 }
 
 mscl_status mscl_node_create(

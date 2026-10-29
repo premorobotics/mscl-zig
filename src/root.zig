@@ -15,6 +15,27 @@ pub const ConnectionType = enum(mscl.mscl_connection_type) {
     tcp = mscl.MSCL_CONNECTION_TYPE_TCP,
 };
 
+/// Available Communication Protocol types.
+pub const CommProtocol = enum(mscl.mscl_comm_protocol) {
+    lxrs = mscl.MSCL_COMM_PROTOCOL_LXRS,
+    lxrs_plus = mscl.MSCL_COMM_PROTOCOL_LXRS_PLUS,
+    _,
+};
+
+/// Represents the transmit powers that can be used for Wireless Devices.
+pub const TransmitPower = enum(mscl.mscl_transmit_power) {
+    @"20dbm" = mscl.MSCL_TRANSMIT_POWER_20DBM,
+    @"16dbm" = mscl.MSCL_TRANSMIT_POWER_16DBM,
+    @"15dbm" = mscl.MSCL_TRANSMIT_POWER_15DBM,
+    @"12dbm" = mscl.MSCL_TRANSMIT_POWER_12DBM,
+    @"11dbm" = mscl.MSCL_TRANSMIT_POWER_11DBM,
+    @"10dbm" = mscl.MSCL_TRANSMIT_POWER_10DBM,
+    @"5dbm" = mscl.MSCL_TRANSMIT_POWER_5DBM,
+    @"1dbm" = mscl.MSCL_TRANSMIT_POWER_1DBM,
+    @"0dbm" = mscl.MSCL_TRANSMIT_POWER_0DBM,
+    _,
+};
+
 /// The base stations attached to this computer.
 pub const BaseStations = struct {
     devices: []mscl.mscl_device_info,
