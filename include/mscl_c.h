@@ -247,8 +247,9 @@ typedef struct mscl_node mscl_node;
 typedef struct mscl_node_config mscl_node_config;
 typedef struct mscl_sync_network mscl_sync_network;
 typedef struct mscl_datalog_downloader mscl_datalog_downloader;
-typedef struct mscl_base_station_features mscl_base_station_features;
 typedef struct mscl_base_station_config mscl_base_station_config;
+typedef struct mscl_base_station_features mscl_base_station_features;
+typedef struct mscl_set_to_idle_status mscl_set_to_idle_status;
 
 typedef struct mscl_device_info {
     /* The key MSCL lists the device under. */
@@ -283,6 +284,27 @@ typedef struct mscl_base_station_analog_pair {
     float output_0v;
     float output_3v;
 } mscl_base_station_analog_pair;
+
+typedef struct mscl_node_discovery {
+    uint32_t node_address;
+    mscl_frequency frequency;
+    /* 0 when the packet does not carry it. */
+    uint16_t pan_id;
+    uint32_t model;
+    /* 0 when the packet does not carry it. */
+    uint32_t serial_number;
+    /* 0.0.0 when the packet does not carry it. */
+    mscl_version firmware_version;
+    /* An mscl_default_mode, or 999 when the packet does not carry it. */
+    uint32_t default_mode;
+    uint32_t built_in_test_result;
+    mscl_comm_protocol comm_protocol;
+    mscl_version aspp_version_lxrs;
+    mscl_version aspp_version_lxrs_plus;
+    int16_t base_rssi;
+    /* Nanoseconds since the Unix epoch. */
+    uint64_t timestamp_ns;
+} mscl_node_discovery;
 
 typedef struct mscl_ping_result {
     bool success;
@@ -362,6 +384,63 @@ EXTERN_C mscl_status mscl_base_station_get_retries(
     mscl_base_station *base_station,
     uint8_t *retries
 );
+EXTERN_C mscl_status mscl_base_station_enable_beacon(
+    mscl_base_station *base_station,
+    uint64_t *beacon_time_ns
+);
+EXTERN_C mscl_status mscl_base_station_disable_beacon(
+    mscl_base_station *base_station
+);
+EXTERN_C mscl_status mscl_base_station_get_last_communication_time(
+    mscl_base_station *base_station,
+    uint64_t *time_ns
+);
+EXTERN_C mscl_status mscl_base_station_use_eeprom_cache(
+    mscl_base_station *base_station,
+    bool use_cache
+);
+EXTERN_C mscl_status mscl_base_station_clear_eeprom_cache(
+    mscl_base_station *base_station
+);
+EXTERN_C mscl_status mscl_base_station_get_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency *frequency
+);
+EXTERN_C mscl_status mscl_base_station_get_communication_protocol(
+    mscl_base_station *base_station,
+    mscl_comm_protocol *protocol
+);
+EXTERN_C mscl_status mscl_base_station_get_firmware_version(
+    mscl_base_station *base_station,
+    mscl_version *version
+);
+EXTERN_C mscl_status mscl_base_station_get_model(
+    mscl_base_station *base_station,
+    mscl_base_model *model
+);
+/* Strings are truncated to fit their buffer, whose length is given. */
+EXTERN_C mscl_status mscl_base_station_get_serial(
+    mscl_base_station *base_station,
+    char *serial,
+    size_t serial_len
+);
+EXTERN_C mscl_status mscl_base_station_get_name(
+    mscl_base_station *base_station,
+    char *name,
+    size_t name_len
+);
+EXTERN_C mscl_status mscl_base_station_get_microcontroller(
+    mscl_base_station *base_station,
+    mscl_microcontroller *microcontroller
+);
+EXTERN_C mscl_status mscl_base_station_get_region_code(
+    mscl_base_station *base_station,
+    mscl_region_code *region_code
+);
+EXTERN_C mscl_status mscl_base_station_get_total_data(
+    mscl_base_station *base_station,
+    uint32_t *count
+);
 EXTERN_C mscl_status mscl_base_station_set_timeout(
     mscl_base_station *base_station,
     uint64_t timeout_ms
@@ -370,12 +449,15 @@ EXTERN_C mscl_status mscl_base_station_get_timeout(
     mscl_base_station *base_station,
     uint64_t *timeout_ms
 );
-EXTERN_C mscl_status mscl_base_station_enable_beacon(
+EXTERN_C mscl_status mscl_base_station_read_eeprom(
     mscl_base_station *base_station,
-    uint64_t *beacon_time_ns
+    uint16_t address,
+    uint16_t *value
 );
-EXTERN_C mscl_status mscl_base_station_disable_beacon(
-    mscl_base_station *base_station
+EXTERN_C mscl_status mscl_base_station_write_eeprom(
+    mscl_base_station *base_station,
+    uint16_t address,
+    uint16_t value
 );
 /* utc_time_s is in seconds since the Unix epoch. */
 EXTERN_C mscl_status mscl_base_station_enable_beacon_at(
@@ -387,14 +469,33 @@ EXTERN_C mscl_status mscl_base_station_get_beacon_status(
     mscl_base_station *base_station,
     mscl_beacon_status *status
 );
-EXTERN_C mscl_status mscl_base_station_get_communication_protocol(
+EXTERN_C mscl_status mscl_base_station_start_rf_sweep_mode(
+    mscl_base_station *base_station
+);
+/* options is an advanced setting that MSCL uses internally. */
+EXTERN_C mscl_status mscl_base_station_start_custom_rf_sweep_mode(
     mscl_base_station *base_station,
-    mscl_comm_protocol *protocol
+    uint32_t min_freq_khz,
+    uint32_t max_freq_khz,
+    uint32_t interval,
+    uint16_t options
+);
+EXTERN_C mscl_status mscl_base_station_cycle_power(
+    mscl_base_station *base_station,
+    bool check_comm
+);
+EXTERN_C mscl_status mscl_base_station_reset_radio(
+    mscl_base_station *base_station
+);
+EXTERN_C mscl_status mscl_base_station_change_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency frequency
 );
 EXTERN_C mscl_status mscl_base_station_get_transmit_power(
     mscl_base_station *base_station,
     mscl_transmit_power *power
 );
+/* Buttons and ports are numbered from 1. */
 EXTERN_C mscl_status mscl_base_station_get_button_long_press(
     mscl_base_station *base_station,
     uint8_t button_number,
@@ -426,41 +527,6 @@ EXTERN_C mscl_status mscl_base_station_get_analog_pair(
     uint8_t port_number,
     mscl_base_station_analog_pair *pair
 );
-EXTERN_C mscl_status mscl_base_station_get_frequency(
-    mscl_base_station *base_station,
-    mscl_frequency *frequency
-);
-EXTERN_C mscl_status mscl_base_station_get_firmware_version(
-    mscl_base_station *base_station,
-    mscl_version *version
-);
-EXTERN_C mscl_status mscl_base_station_get_model(
-    mscl_base_station *base_station,
-    mscl_base_model *model
-);
-/* Strings are truncated to fit their buffer, whose length is given. */
-EXTERN_C mscl_status mscl_base_station_get_serial(
-    mscl_base_station *base_station,
-    char *serial,
-    size_t serial_len
-);
-EXTERN_C mscl_status mscl_base_station_get_name(
-    mscl_base_station *base_station,
-    char *name,
-    size_t name_len
-);
-EXTERN_C mscl_status mscl_base_station_get_microcontroller(
-    mscl_base_station *base_station,
-    mscl_microcontroller *microcontroller
-);
-EXTERN_C mscl_status mscl_base_station_get_region_code(
-    mscl_base_station *base_station,
-    mscl_region_code *region_code
-);
-EXTERN_C mscl_status mscl_base_station_change_frequency(
-    mscl_base_station *base_station,
-    mscl_frequency frequency
-);
 /*
  * Sweeps collected since the last call, waiting up to timeout_ms for the
  * first one. max_sweeps of 0 returns all of them. Free with mscl_sweeps_free.
@@ -473,6 +539,24 @@ EXTERN_C mscl_status mscl_base_station_get_data(
     size_t *count
 );
 EXTERN_C void mscl_sweeps_free(mscl_sweep *sweeps, size_t count);
+/*
+ * Node Discoveries collected since the last call; free with
+ * mscl_node_discoveries_free.
+ */
+EXTERN_C mscl_status mscl_base_station_get_node_discoveries(
+    mscl_base_station *base_station,
+    mscl_node_discovery **discoveries,
+    size_t *count
+);
+EXTERN_C void mscl_node_discoveries_free(mscl_node_discovery *discoveries);
+/*
+ * Sends Set to Idle to every node on the base station's frequency. The status
+ * never completes; destroy it with mscl_set_to_idle_status_destroy.
+ */
+EXTERN_C mscl_status mscl_base_station_broadcast_set_to_idle(
+    mscl_base_station *base_station,
+    mscl_set_to_idle_status **status
+);
 /*
  * Checks config against the base station. When it is not valid, *ok is false
  * and issues receives one line per problem, truncated to issues_len.
@@ -570,6 +654,22 @@ EXTERN_C mscl_status mscl_base_station_features_get_min_transmit_power(
     mscl_region_code region,
     mscl_comm_protocol comm_protocol,
     mscl_transmit_power *power
+);
+
+/* Destroying it cancels the operation if it has not completed. */
+EXTERN_C void mscl_set_to_idle_status_destroy(mscl_set_to_idle_status *status);
+EXTERN_C mscl_status mscl_set_to_idle_status_get_result(
+    mscl_set_to_idle_status *status,
+    mscl_set_to_idle_result *result
+);
+/* Waits up to timeout_ms for the operation to complete. */
+EXTERN_C mscl_status mscl_set_to_idle_status_complete(
+    mscl_set_to_idle_status *status,
+    uint64_t timeout_ms,
+    bool *complete
+);
+EXTERN_C mscl_status mscl_set_to_idle_status_cancel(
+    mscl_set_to_idle_status *status
 );
 
 /* Settings to write to a base station. Settings left unset are not changed. */

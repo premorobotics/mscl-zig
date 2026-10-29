@@ -1,6 +1,7 @@
 const std = @import("std");
 pub const mscl = @import("mscl");
 pub const BaseStation = @import("BaseStation.zig");
+pub const SetToIdleStatus = @import("SetToIdleStatus.zig");
 
 pub const Error = error{
     /// The port does not exist.
@@ -120,6 +121,30 @@ pub const BaseStations = struct {
             return;
         }
         mscl.mscl_device_infos_free(self.devices.ptr);
+    }
+};
+
+/// Typedef for a vector of DataSweep objects.
+pub const DataSweeps = struct {
+    sweeps: []mscl.mscl_sweep,
+
+    pub fn deinit(self: DataSweeps) void {
+        if (self.sweeps.len == 0) {
+            return;
+        }
+        mscl.mscl_sweeps_free(self.sweeps.ptr, self.sweeps.len);
+    }
+};
+
+/// typedef for a vector of NodeDiscovery objects
+pub const NodeDiscoveries = struct {
+    discoveries: []mscl.mscl_node_discovery,
+
+    pub fn deinit(self: NodeDiscoveries) void {
+        if (self.discoveries.len == 0) {
+            return;
+        }
+        mscl.mscl_node_discoveries_free(self.discoveries.ptr);
     }
 };
 

@@ -31,7 +31,11 @@ pub const Error = error{
     InvalidSerialPort,
     Communication,
     NotSupported,
+    NoData,
     InvalidConfig,
+    /// An argument breaks the rule in the function's documentation; nothing
+    /// was sent to the BaseStation.
+    InvalidArgument,
     /// Any other failure; `root.mscl.mscl_last_error()` describes it.
     MsclFailure,
 };
@@ -275,6 +279,252 @@ pub fn disableBeacon(self: *BaseStation) Error!void {
     self.state.beacon_status = try self.beaconStatus();
 }
 
+/// Gets the Timestamp for the last time MSCL communicated with the
+/// BaseStation.
+/// Note: EEPROM reads using the cache, and data collection, will not update
+/// this timestamp.
+pub fn getLastCommunicationTime(self: BaseStation) Error!u64 {
+    var time_ns: u64 = 0;
+    const status = root.mscl.mscl_base_station_get_last_communication_time(
+        self.handle,
+        &time_ns,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => time_ns,
+        // There is no communication time logged for this device.
+        root.mscl.MSCL_ERROR_NO_DATA => Error.NoData,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Sets whether to use the eeprom cache when configuring this BaseStation
+/// (enabled by default). This can be enabled/disabled at any time.
+/// It is highly recommended to have eeprom caching be enabled.
+/// Note: The eeprom cache stores the last known value that was written to /
+/// read from the BaseStation for each eeprom location. If this is enabled,
+/// any reads will get the last known value from the cache if it exists, and
+/// any writes will not write to the BaseStation if the value attempting to be
+/// written is the same as that stored in the cache. Caching of these values
+/// will still be performed if this is disabled, however, read and write
+/// operations will then always reach out to the actual device.
+pub fn useEepromCache(self: BaseStation, use_cache: bool) void {
+    _ = root.mscl.mscl_base_station_use_eeprom_cache(self.handle, use_cache);
+}
+
+/// Clears the eeprom cache for this BaseStation.
+pub fn clearEepromCache(self: BaseStation) void {
+    _ = root.mscl.mscl_base_station_clear_eeprom_cache(self.handle);
+}
+
+/// Gets up to the requested amount of DataSweeps of sampled data that was
+/// collected by this BaseStation.
+pub fn getData(
+    self: BaseStation,
+    timeout_ms: u32,
+    max_sweeps: u32,
+) Error!root.DataSweeps {
+    var sweeps: [*c]root.mscl.mscl_sweep = null;
+    var count: usize = 0;
+    const status = root.mscl.mscl_base_station_get_data(
+        self.handle,
+        timeout_ms,
+        max_sweeps,
+        &sweeps,
+        &count,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .sweeps = if (count == 0) &.{} else sweeps[0..count],
+        },
+        // A connection error has occurred with the BaseStation
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the number of DataSweeps that are currently in the data buffer.
+pub fn getTotalData(self: BaseStation) u32 {
+    var count: u32 = 0;
+    _ = root.mscl.mscl_base_station_get_total_data(self.handle, &count);
+    return count;
+}
+
+/// Gets the group of Node Discoveries that were collected by this base
+/// station.
+/// Calling this function clears out the Node Discovery buffer, so successively
+/// calling this will give you new Node Discoveries.
+pub fn getNodeDiscoveries(self: BaseStation) Error!root.NodeDiscoveries {
+    var discoveries: [*c]root.mscl.mscl_node_discovery = null;
+    var count: usize = 0;
+    const status = root.mscl.mscl_base_station_get_node_discoveries(
+        self.handle,
+        &discoveries,
+        &count,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .discoveries = if (count == 0) &.{} else discoveries[0..count],
+        },
+        // A connection error has occurred with the BaseStation
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads a specific EEPROM address on the Base Station.
+/// If the value stored in the eeprom cache is still valid, this will be
+/// returned instead.
+pub fn readEeprom(self: BaseStation, address: u16) Error!u16 {
+    var value: u16 = 0;
+    const status = root.mscl.mscl_base_station_read_eeprom(
+        self.handle,
+        address,
+        &value,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => value,
+        // Unsupported eeprom location.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Writes the specified value to a specific EEPROM address on the Base
+/// Station.
+/// If successful, the cache will be updated with the changed value as well.
+pub fn writeEeprom(self: BaseStation, address: u16, value: u16) Error!void {
+    const status = root.mscl.mscl_base_station_write_eeprom(
+        self.handle,
+        address,
+        value,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => {},
+        // Unsupported eeprom location or value.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to write the value to the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Starts the BaseStation in RF Sweep Mode.
+/// With every option null, this is the fixed RF Sweep Mode, which will sweep
+/// over all the supported operating frequencies of the BaseStation. With every
+/// option set, it is a custom RF Sweep Mode across the provided frequencies.
+/// Setting only some of the options returns InvalidArgument.
+/// Note: To exit this Mode, send any command to the BaseStation (such as
+/// ping).
+pub fn startRfSweepMode(
+    self: BaseStation,
+    option: struct {
+        /// The minimum frequency to use in the scan in kHz (2400000 = 2.4GHz).
+        min_freq: ?u32 = null,
+        /// The maximum frequency to use in the scan in kHz (2400000 = 2.4GHz).
+        max_freq: ?u32 = null,
+        /// The interval between frequencies.
+        interval: ?u32 = null,
+    },
+) Error!void {
+    const fixed = option.min_freq == null and
+        option.max_freq == null and
+        option.interval == null;
+    const status = if (fixed)
+        root.mscl.mscl_base_station_start_rf_sweep_mode(self.handle)
+    else
+        // A null option here means only some of them are set.
+        root.mscl.mscl_base_station_start_custom_rf_sweep_mode(
+            self.handle,
+            option.min_freq orelse return Error.InvalidArgument,
+            option.max_freq orelse return Error.InvalidArgument,
+            option.interval orelse return Error.InvalidArgument,
+            0,
+        );
+    return switch (status) {
+        root.mscl.MSCL_OK => {},
+        // RF Sweep Mode is not supported by this BaseStation; with an option
+        // set, Raw RF Sweep Mode is not supported by this BaseStation.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // The command has failed.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Cycles the power on the base station.
+pub fn cyclePower(
+    self: BaseStation,
+    option: struct {
+        /// Whether to check for communication (ping) after cycling power
+        /// before returning from this function.
+        check_comm: bool = true,
+    },
+) Error!void {
+    const status = root.mscl.mscl_base_station_cycle_power(
+        self.handle,
+        option.check_comm,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => {},
+        // Attempted to write an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // Failed to cycle the power.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Resets the radio on the base station.
+pub fn resetRadio(self: BaseStation) Error!void {
+    const status = root.mscl.mscl_base_station_reset_radio(self.handle);
+    return switch (status) {
+        root.mscl.MSCL_OK => {},
+        // Attempted to write an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // Failed to cycle the power.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
 /// Changes the radio frequency of the base station.
 /// Updates `state.frequency`.
 pub fn changeFrequency(
@@ -306,6 +556,27 @@ pub fn changeFrequency(
         },
     }
     self.state.frequency = try self.frequency();
+}
+
+/// Broadcasts the Set to Idle command (will be heard by all nodes on the
+/// BaseStation's frequency).
+/// Note that this status object will never complete as it is not targeting a
+/// specific Node.
+pub fn broadcastSetToIdle(self: BaseStation) Error!root.SetToIdleStatus {
+    var handle: ?*root.mscl.mscl_set_to_idle_status = null;
+    const status = root.mscl.mscl_base_station_broadcast_set_to_idle(
+        self.handle,
+        &handle,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{ .handle = handle.? },
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }
 
 /// Reads every setting that a BaseStationConfig can hold from the

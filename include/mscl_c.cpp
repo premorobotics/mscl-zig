@@ -74,6 +74,15 @@ struct mscl_base_station_config {
     mscl::BaseStationConfig config;
 };
 
+struct mscl_set_to_idle_status {
+    explicit mscl_set_to_idle_status(const mscl::SetToIdleStatus &status)
+        : status(status)
+    {
+    }
+
+    mscl::SetToIdleStatus status;
+};
+
 // The C enums reuse MSCL's values, so converting is a cast. These checks
 // catch MSCL changing a value.
 #define MSCL_C_SAME(c_value, mscl_value)                                    \
@@ -501,6 +510,37 @@ void fill_sweep(const mscl::DataSweep &data, mscl_sweep &sweep)
     fill_points(data.data(), sweep);
 }
 
+void fill_version(const mscl::Version &data, mscl_version &version)
+{
+    version.major = data.majorPart();
+    version.minor = data.minorPart();
+    version.patch = data.patchPart();
+}
+
+void fill_node_discovery(
+    const mscl::NodeDiscovery &data,
+    mscl_node_discovery &discovery
+)
+{
+    discovery.node_address = data.nodeAddress();
+    discovery.frequency = static_cast<mscl_frequency>(data.frequency());
+    discovery.pan_id = data.panId();
+    discovery.model = static_cast<uint32_t>(data.model());
+    discovery.serial_number = data.serialNumber();
+    fill_version(data.firmwareVersion(), discovery.firmware_version);
+    discovery.default_mode = static_cast<uint32_t>(data.defaultMode());
+    discovery.built_in_test_result = data.builtInTestResult();
+    discovery.comm_protocol =
+        static_cast<mscl_comm_protocol>(data.communicationProtocol());
+    fill_version(data.asppVersion_lxrs(), discovery.aspp_version_lxrs);
+    fill_version(
+        data.asppVersion_lxrsPlus(),
+        discovery.aspp_version_lxrs_plus
+    );
+    discovery.base_rssi = data.baseRssi();
+    discovery.timestamp_ns = data.timestamp().nanoseconds();
+}
+
 // mscl_base_station_features is never defined: a handle points at the
 // BaseStationFeatures that the base station owns.
 const mscl::BaseStationFeatures &features_of(
@@ -638,6 +678,189 @@ mscl_status mscl_base_station_get_retries(
     return call([&] { *retries = base_station->base.readWriteRetries(); });
 }
 
+mscl_status mscl_base_station_enable_beacon(
+    mscl_base_station *base_station,
+    uint64_t *beacon_time_ns
+)
+{
+    if (base_station == nullptr || beacon_time_ns == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *beacon_time_ns = base_station->base.enableBeacon().nanoseconds();
+    });
+}
+
+mscl_status mscl_base_station_disable_beacon(mscl_base_station *base_station)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.disableBeacon(); });
+}
+
+mscl_status mscl_base_station_get_last_communication_time(
+    mscl_base_station *base_station,
+    uint64_t *time_ns
+)
+{
+    if (base_station == nullptr || time_ns == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *time_ns = base_station->base.lastCommunicationTime().nanoseconds();
+    });
+}
+
+mscl_status mscl_base_station_use_eeprom_cache(
+    mscl_base_station *base_station,
+    bool use_cache
+)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.useEepromCache(use_cache); });
+}
+
+mscl_status mscl_base_station_clear_eeprom_cache(
+    mscl_base_station *base_station
+)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.clearEepromCache(); });
+}
+
+mscl_status mscl_base_station_get_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency *frequency
+)
+{
+    if (base_station == nullptr || frequency == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *frequency =
+            static_cast<mscl_frequency>(base_station->base.frequency());
+    });
+}
+
+mscl_status mscl_base_station_get_communication_protocol(
+    mscl_base_station *base_station,
+    mscl_comm_protocol *protocol
+)
+{
+    if (base_station == nullptr || protocol == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *protocol = static_cast<mscl_comm_protocol>(
+            base_station->base.communicationProtocol()
+        );
+    });
+}
+
+mscl_status mscl_base_station_get_firmware_version(
+    mscl_base_station *base_station,
+    mscl_version *version
+)
+{
+    if (base_station == nullptr || version == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::Version firmware = base_station->base.firmwareVersion();
+        version->major = firmware.majorPart();
+        version->minor = firmware.minorPart();
+        version->patch = firmware.patchPart();
+    });
+}
+
+mscl_status mscl_base_station_get_model(
+    mscl_base_station *base_station,
+    mscl_base_model *model
+)
+{
+    if (base_station == nullptr || model == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *model = static_cast<mscl_base_model>(base_station->base.model());
+    });
+}
+
+mscl_status mscl_base_station_get_serial(
+    mscl_base_station *base_station,
+    char *serial,
+    size_t serial_len
+)
+{
+    if (base_station == nullptr || serial == nullptr) {
+        return fail_null(__func__);
+    }
+    copy_string(serial, serial_len, "");
+    return call([&] {
+        copy_string(serial, serial_len, base_station->base.serial());
+    });
+}
+
+mscl_status mscl_base_station_get_name(
+    mscl_base_station *base_station,
+    char *name,
+    size_t name_len
+)
+{
+    if (base_station == nullptr || name == nullptr) {
+        return fail_null(__func__);
+    }
+    copy_string(name, name_len, "");
+    return call([&] {
+        copy_string(name, name_len, base_station->base.name());
+    });
+}
+
+mscl_status mscl_base_station_get_microcontroller(
+    mscl_base_station *base_station,
+    mscl_microcontroller *microcontroller
+)
+{
+    if (base_station == nullptr || microcontroller == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *microcontroller = static_cast<mscl_microcontroller>(
+            base_station->base.microcontroller()
+        );
+    });
+}
+
+mscl_status mscl_base_station_get_region_code(
+    mscl_base_station *base_station,
+    mscl_region_code *region_code
+)
+{
+    if (base_station == nullptr || region_code == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *region_code =
+            static_cast<mscl_region_code>(base_station->base.regionCode());
+    });
+}
+
+mscl_status mscl_base_station_get_total_data(
+    mscl_base_station *base_station,
+    uint32_t *count
+)
+{
+    if (base_station == nullptr || count == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *count = base_station->base.totalData(); });
+}
+
 mscl_status mscl_base_station_set_timeout(
     mscl_base_station *base_station,
     uint64_t timeout_ms
@@ -660,25 +883,28 @@ mscl_status mscl_base_station_get_timeout(
     return call([&] { *timeout_ms = base_station->base.timeout(); });
 }
 
-mscl_status mscl_base_station_enable_beacon(
+mscl_status mscl_base_station_read_eeprom(
     mscl_base_station *base_station,
-    uint64_t *beacon_time_ns
+    uint16_t address,
+    uint16_t *value
 )
 {
-    if (base_station == nullptr || beacon_time_ns == nullptr) {
+    if (base_station == nullptr || value == nullptr) {
         return fail_null(__func__);
     }
-    return call([&] {
-        *beacon_time_ns = base_station->base.enableBeacon().nanoseconds();
-    });
+    return call([&] { *value = base_station->base.readEeprom(address); });
 }
 
-mscl_status mscl_base_station_disable_beacon(mscl_base_station *base_station)
+mscl_status mscl_base_station_write_eeprom(
+    mscl_base_station *base_station,
+    uint16_t address,
+    uint16_t value
+)
 {
     if (base_station == nullptr) {
         return fail_null(__func__);
     }
-    return call([&] { base_station->base.disableBeacon(); });
+    return call([&] { base_station->base.writeEeprom(address, value); });
 }
 
 mscl_status mscl_base_station_enable_beacon_at(
@@ -711,17 +937,67 @@ mscl_status mscl_base_station_get_beacon_status(
     });
 }
 
-mscl_status mscl_base_station_get_communication_protocol(
-    mscl_base_station *base_station,
-    mscl_comm_protocol *protocol
+mscl_status mscl_base_station_start_rf_sweep_mode(
+    mscl_base_station *base_station
 )
 {
-    if (base_station == nullptr || protocol == nullptr) {
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.startRfSweepMode(); });
+}
+
+mscl_status mscl_base_station_start_custom_rf_sweep_mode(
+    mscl_base_station *base_station,
+    uint32_t min_freq_khz,
+    uint32_t max_freq_khz,
+    uint32_t interval,
+    uint16_t options
+)
+{
+    if (base_station == nullptr) {
         return fail_null(__func__);
     }
     return call([&] {
-        *protocol = static_cast<mscl_comm_protocol>(
-            base_station->base.communicationProtocol()
+        base_station->base.startRfSweepMode(
+            min_freq_khz,
+            max_freq_khz,
+            interval,
+            options
+        );
+    });
+}
+
+mscl_status mscl_base_station_cycle_power(
+    mscl_base_station *base_station,
+    bool check_comm
+)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.cyclePower(check_comm); });
+}
+
+mscl_status mscl_base_station_reset_radio(mscl_base_station *base_station)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.resetRadio(); });
+}
+
+mscl_status mscl_base_station_change_frequency(
+    mscl_base_station *base_station,
+    mscl_frequency frequency
+)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        base_station->base.changeFrequency(
+            static_cast<WirelessTypes::Frequency>(frequency)
         );
     });
 }
@@ -847,123 +1123,6 @@ mscl_status mscl_base_station_get_analog_pair(
     });
 }
 
-mscl_status mscl_base_station_get_frequency(
-    mscl_base_station *base_station,
-    mscl_frequency *frequency
-)
-{
-    if (base_station == nullptr || frequency == nullptr) {
-        return fail_null(__func__);
-    }
-    return call([&] {
-        *frequency =
-            static_cast<mscl_frequency>(base_station->base.frequency());
-    });
-}
-
-mscl_status mscl_base_station_get_firmware_version(
-    mscl_base_station *base_station,
-    mscl_version *version
-)
-{
-    if (base_station == nullptr || version == nullptr) {
-        return fail_null(__func__);
-    }
-    return call([&] {
-        const mscl::Version firmware = base_station->base.firmwareVersion();
-        version->major = firmware.majorPart();
-        version->minor = firmware.minorPart();
-        version->patch = firmware.patchPart();
-    });
-}
-
-mscl_status mscl_base_station_get_model(
-    mscl_base_station *base_station,
-    mscl_base_model *model
-)
-{
-    if (base_station == nullptr || model == nullptr) {
-        return fail_null(__func__);
-    }
-    return call([&] {
-        *model = static_cast<mscl_base_model>(base_station->base.model());
-    });
-}
-
-mscl_status mscl_base_station_get_serial(
-    mscl_base_station *base_station,
-    char *serial,
-    size_t serial_len
-)
-{
-    if (base_station == nullptr || serial == nullptr) {
-        return fail_null(__func__);
-    }
-    copy_string(serial, serial_len, "");
-    return call([&] {
-        copy_string(serial, serial_len, base_station->base.serial());
-    });
-}
-
-mscl_status mscl_base_station_get_name(
-    mscl_base_station *base_station,
-    char *name,
-    size_t name_len
-)
-{
-    if (base_station == nullptr || name == nullptr) {
-        return fail_null(__func__);
-    }
-    copy_string(name, name_len, "");
-    return call([&] {
-        copy_string(name, name_len, base_station->base.name());
-    });
-}
-
-mscl_status mscl_base_station_get_microcontroller(
-    mscl_base_station *base_station,
-    mscl_microcontroller *microcontroller
-)
-{
-    if (base_station == nullptr || microcontroller == nullptr) {
-        return fail_null(__func__);
-    }
-    return call([&] {
-        *microcontroller = static_cast<mscl_microcontroller>(
-            base_station->base.microcontroller()
-        );
-    });
-}
-
-mscl_status mscl_base_station_get_region_code(
-    mscl_base_station *base_station,
-    mscl_region_code *region_code
-)
-{
-    if (base_station == nullptr || region_code == nullptr) {
-        return fail_null(__func__);
-    }
-    return call([&] {
-        *region_code =
-            static_cast<mscl_region_code>(base_station->base.regionCode());
-    });
-}
-
-mscl_status mscl_base_station_change_frequency(
-    mscl_base_station *base_station,
-    mscl_frequency frequency
-)
-{
-    if (base_station == nullptr) {
-        return fail_null(__func__);
-    }
-    return call([&] {
-        base_station->base.changeFrequency(
-            static_cast<WirelessTypes::Frequency>(frequency)
-        );
-    });
-}
-
 mscl_status mscl_base_station_get_data(
     mscl_base_station *base_station,
     uint32_t timeout_ms,
@@ -1006,6 +1165,58 @@ void mscl_sweeps_free(mscl_sweep *sweeps, size_t count)
         std::free(sweeps[i].points);
     }
     std::free(sweeps);
+}
+
+mscl_status mscl_base_station_get_node_discoveries(
+    mscl_base_station *base_station,
+    mscl_node_discovery **discoveries,
+    size_t *count
+)
+{
+    if (
+        base_station == nullptr ||
+        discoveries == nullptr ||
+        count == nullptr
+    ) {
+        return fail_null(__func__);
+    }
+    *discoveries = nullptr;
+    *count = 0;
+    return call([&] {
+        const mscl::NodeDiscoveries data =
+            base_station->base.getNodeDiscoveries();
+        if (data.empty()) {
+            return;
+        }
+        mscl_node_discovery *result =
+            allocate_zeroed<mscl_node_discovery>(data.size());
+        for (size_t i = 0; i < data.size(); i++) {
+            fill_node_discovery(data[i], result[i]);
+        }
+        *discoveries = result;
+        *count = data.size();
+    });
+}
+
+void mscl_node_discoveries_free(mscl_node_discovery *discoveries)
+{
+    std::free(discoveries);
+}
+
+mscl_status mscl_base_station_broadcast_set_to_idle(
+    mscl_base_station *base_station,
+    mscl_set_to_idle_status **status
+)
+{
+    if (base_station == nullptr || status == nullptr) {
+        return fail_null(__func__);
+    }
+    *status = nullptr;
+    return call([&] {
+        *status = new mscl_set_to_idle_status(
+            base_station->base.broadcastSetToIdle()
+        );
+    });
 }
 
 mscl_status mscl_base_station_verify_config(
@@ -1291,6 +1502,46 @@ mscl_status mscl_base_station_features_get_min_transmit_power(
             )
         );
     });
+}
+
+void mscl_set_to_idle_status_destroy(mscl_set_to_idle_status *status)
+{
+    delete status;
+}
+
+mscl_status mscl_set_to_idle_status_get_result(
+    mscl_set_to_idle_status *status,
+    mscl_set_to_idle_result *result
+)
+{
+    if (status == nullptr || result == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *result = static_cast<mscl_set_to_idle_result>(
+            status->status.result()
+        );
+    });
+}
+
+mscl_status mscl_set_to_idle_status_complete(
+    mscl_set_to_idle_status *status,
+    uint64_t timeout_ms,
+    bool *complete
+)
+{
+    if (status == nullptr || complete == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *complete = status->status.complete(timeout_ms); });
+}
+
+mscl_status mscl_set_to_idle_status_cancel(mscl_set_to_idle_status *status)
+{
+    if (status == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { status->status.cancel(); });
 }
 
 mscl_status mscl_base_station_config_create(mscl_base_station_config **config)
