@@ -2,6 +2,7 @@ const std = @import("std");
 const root = @import("root.zig");
 
 const BaseStation = @This();
+pub const Config = @import("BaseStation/Config.zig");
 pub const Features = @import("BaseStation/Features.zig");
 
 handle: *root.mscl.mscl_base_station,
@@ -14,6 +15,7 @@ pub const Error = error{
     InvalidSerialPort,
     Communication,
     NotSupported,
+    InvalidConfig,
     /// Any other failure; `root.mscl.mscl_last_error()` describes it.
     MsclFailure,
 };
@@ -39,6 +41,15 @@ pub const Button = struct {
         disabled = root.mscl.MSCL_BUTTON_COMMAND_DISABLED,
         _,
     };
+};
+
+/// Represents an Analog Pairing on a BaseStation.
+pub const AnalogPair = struct {
+    node_address: u16,
+    node_channel: u8,
+    expect_float_data: bool,
+    output_0v: f32,
+    output_3v: f32,
 };
 
 /// Represents the status of a BaseStation beacon.
@@ -213,60 +224,6 @@ pub fn getBeaconStatus(self: BaseStation) Error!BeaconStatus {
     };
 }
 
-/// Reads the button settings for a long press action that are currently set
-/// on the BaseStation.
-pub fn getButtonLongPress(self: BaseStation, button_number: u8) Error!Button {
-    var button: root.mscl.mscl_base_station_button = undefined;
-    const status = root.mscl.mscl_base_station_get_button_long_press(
-        self.handle,
-        button_number,
-        &button,
-    );
-    return switch (status) {
-        root.mscl.MSCL_OK => .{
-            .command = @fromBackingInt(button.command),
-            .node_address = button.node_address,
-        },
-        // The BaseStation does not support the requested button.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
-        // Failed to read from the BaseStation.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        // A connection error has occurred with the BaseStation.
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
-        },
-    };
-}
-
-/// Reads the button settings for a short press action that are currently set
-/// on the BaseStation.
-pub fn getButtonShortPress(self: BaseStation, button_number: u8) Error!Button {
-    var button: root.mscl.mscl_base_station_button = undefined;
-    const status = root.mscl.mscl_base_station_get_button_short_press(
-        self.handle,
-        button_number,
-        &button,
-    );
-    return switch (status) {
-        root.mscl.MSCL_OK => .{
-            .command = @fromBackingInt(button.command),
-            .node_address = button.node_address,
-        },
-        // The BaseStation does not support the requested button.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
-        // Failed to read from the BaseStation.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        // A connection error has occurred with the BaseStation.
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
-        },
-    };
-}
-
 /// Gets the name of the BaseStation. This is the universal basestation name
 /// that should be used for SensorCloud.
 /// This is the same as calling BaseStation::deviceName.
@@ -305,4 +262,381 @@ pub fn nameAlloc(
     // always fits.
     var buffer: [32]u8 = undefined;
     return gpa.dupe(u8, try self.name(&buffer));
+}
+
+/// Reads every setting that a BaseStationConfig can hold from the
+/// BaseStation. A setting that the BaseStation does not support is null or
+/// empty.
+/// Free the result with `Config.deinit`.
+pub fn getConfig(
+    self: BaseStation,
+    gpa: std.mem.Allocator,
+) (Error || std.mem.Allocator.Error)!Config {
+    var result: Config = std.mem.zeroInit(Config, .{});
+    errdefer result.deinit(gpa);
+
+    // A setting that the BaseStation does not support stays null.
+    result.transmit_power = self.getTransmitPower() catch |err| switch (err) {
+        Error.NotSupported => null,
+        else => |e| {
+            return e;
+        },
+    };
+    result.communication_protocol = try self.getCommunicationProtocol();
+    result.analog_pairing_enable =
+        self.getAnalogPairingEnabled() catch |err| switch (err) {
+            Error.NotSupported => null,
+            else => |e| {
+                return e;
+            },
+        };
+    result.analog_timeout_time =
+        self.getAnalogTimeoutTime() catch |err| switch (err) {
+            Error.NotSupported => null,
+            else => |e| {
+                return e;
+            },
+        };
+    result.analog_timeout_voltage =
+        self.getAnalogTimeoutVoltage() catch |err| switch (err) {
+            Error.NotSupported => null,
+            else => |e| {
+                return e;
+            },
+        };
+    result.analog_exceedance_enable =
+        self.getAnalogExceedanceEnabled() catch |err| switch (err) {
+            Error.NotSupported => null,
+            else => |e| {
+                return e;
+            },
+        };
+
+    // Without features, the number of buttons and ports is unknown.
+    const button_count: u8 =
+        if (self.features) |features| features.button_count else 0;
+    const analog_port_count: u8 =
+        if (self.features) |features| features.analog_port_count else 0;
+
+    const button_long_press =
+        try gpa.alloc(Config.NumberedButton, button_count);
+    result.button_long_press = button_long_press;
+    for (button_long_press, 1..) |*numbered, number| {
+        numbered.* = .{
+            .number = @intCast(number),
+            .button = try self.getButtonLongPress(@intCast(number)),
+        };
+    }
+    const button_short_press =
+        try gpa.alloc(Config.NumberedButton, button_count);
+    result.button_short_press = button_short_press;
+    for (button_short_press, 1..) |*numbered, number| {
+        numbered.* = .{
+            .number = @intCast(number),
+            .button = try self.getButtonShortPress(@intCast(number)),
+        };
+    }
+    const analog_pairing =
+        try gpa.alloc(Config.NumberedAnalogPair, analog_port_count);
+    result.analog_pairing = analog_pairing;
+    for (analog_pairing, 1..) |*numbered, number| {
+        numbered.* = .{
+            .number = @intCast(number),
+            .pair = try self.getAnalogPair(@intCast(number)),
+        };
+    }
+    return result;
+}
+
+/// Applies a BaseStationConfig to the Node.
+/// Note: This applies all options that have been set in the
+/// BaseStationConfig. Before applying, the options will be validated.
+/// Options that are set will also be validated against each other. If an
+/// option that needs to be validated isn't currently set, it will be read from
+/// the BaseStation.
+/// When the options are not valid, nothing is applied, `issues` receives one
+/// line per problem, NUL-terminated and truncated to fit, and InvalidConfig is
+/// returned.
+pub fn applyConfig(
+    self: BaseStation,
+    config: Config,
+    issues: []u8,
+) (Error || std.mem.Allocator.Error)!void {
+    const mscl_config = try config.createHandle();
+    defer root.mscl.mscl_base_station_config_destroy(mscl_config);
+
+    var ok = false;
+    const verify_status = root.mscl.mscl_base_station_verify_config(
+        self.handle,
+        mscl_config,
+        &ok,
+        issues.ptr,
+        issues.len,
+    );
+    switch (verify_status) {
+        root.mscl.MSCL_OK => {},
+        // The BaseStation model, or firmware version, is not supported by
+        // MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => {
+            return Error.NotSupported;
+        },
+        // Failed to communicate with the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => {
+            return Error.Communication;
+        },
+        // A connection error has occurred.
+        root.mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
+        },
+        else => {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    if (!ok) {
+        // The configuration is invalid; `issues` lists why.
+        return Error.InvalidConfig;
+    }
+
+    const apply_status = root.mscl.mscl_base_station_apply_config(
+        self.handle,
+        mscl_config,
+    );
+    return switch (apply_status) {
+        root.mscl.MSCL_OK => {},
+        // The BaseStation model, or firmware version, is not supported by
+        // MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Invalid Configuration. Check the exception for specific details.
+        root.mscl.MSCL_ERROR_INVALID_CONFIG => Error.InvalidConfig,
+        // Failed to write to the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the WirelessTypes::TransmitPower that is currently set on the
+/// BaseStation.
+fn getTransmitPower(self: BaseStation) Error!root.TransmitPower {
+    var power: root.mscl.mscl_transmit_power = 0;
+    const status = root.mscl.mscl_base_station_get_transmit_power(
+        self.handle,
+        &power,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => @fromBackingInt(power),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the button settings for a long press action that are currently set
+/// on the BaseStation.
+fn getButtonLongPress(self: BaseStation, button_number: u8) Error!Button {
+    var button: root.mscl.mscl_base_station_button = undefined;
+    const status = root.mscl.mscl_base_station_get_button_long_press(
+        self.handle,
+        button_number,
+        &button,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .command = @fromBackingInt(button.command),
+            .node_address = button.node_address,
+        },
+        // The BaseStation does not support the requested button.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the button settings for a short press action that are currently set
+/// on the BaseStation.
+fn getButtonShortPress(self: BaseStation, button_number: u8) Error!Button {
+    var button: root.mscl.mscl_base_station_button = undefined;
+    const status = root.mscl.mscl_base_station_get_button_short_press(
+        self.handle,
+        button_number,
+        &button,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .command = @fromBackingInt(button.command),
+            .node_address = button.node_address,
+        },
+        // The BaseStation does not support the requested button.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the Analog Pairing enabled/disabled setting that is currently set on
+/// the BaseStation.
+/// If this is disabled, all other analog pairing settings will be disabled.
+fn getAnalogPairingEnabled(self: BaseStation) Error!bool {
+    var enabled = false;
+    const status = root.mscl.mscl_base_station_get_analog_pairing_enabled(
+        self.handle,
+        &enabled,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => enabled,
+        // The BaseStation does not support Analog Pairing.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the Analog Timeout Time in seconds that is currently set on the
+/// BaseStation.
+fn getAnalogTimeoutTime(self: BaseStation) Error!u16 {
+    var seconds: u16 = 0;
+    const status = root.mscl.mscl_base_station_get_analog_timeout_time(
+        self.handle,
+        &seconds,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => seconds,
+        // The BaseStation does not support Analog Pairing.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the Analog Timeout Voltage that is currently set on the BaseStation.
+fn getAnalogTimeoutVoltage(self: BaseStation) Error!f32 {
+    var voltage: f32 = 0;
+    const status = root.mscl.mscl_base_station_get_analog_timeout_voltage(
+        self.handle,
+        &voltage,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => voltage,
+        // The BaseStation does not support Analog Pairing.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the Analog Exceedance enabled/disabled setting that is currently set
+/// on the BaseStation.
+fn getAnalogExceedanceEnabled(self: BaseStation) Error!bool {
+    var enabled = false;
+    const status = root.mscl.mscl_base_station_get_analog_exceedance_enabled(
+        self.handle,
+        &enabled,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => enabled,
+        // The BaseStation does not support Analog Pairing.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the BaseStationAnalogPair for the specified port number that is
+/// currently set on the BaseStation.
+fn getAnalogPair(self: BaseStation, port_number: u8) Error!AnalogPair {
+    var pair: root.mscl.mscl_base_station_analog_pair = undefined;
+    const status = root.mscl.mscl_base_station_get_analog_pair(
+        self.handle,
+        port_number,
+        &pair,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .node_address = pair.node_address,
+            .node_channel = pair.node_channel,
+            .expect_float_data = pair.expect_float_data,
+            .output_0v = pair.output_0v,
+            .output_3v = pair.output_3v,
+        },
+        // The BaseStation does not support Analog Pairing.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the WirelessTypes::CommProtocol that the BaseStation is currently set
+/// to use.
+fn getCommunicationProtocol(self: BaseStation) Error!root.CommProtocol {
+    var protocol: root.mscl.mscl_comm_protocol = 0;
+    const status = root.mscl.mscl_base_station_get_communication_protocol(
+        self.handle,
+        &protocol,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => @fromBackingInt(protocol),
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }

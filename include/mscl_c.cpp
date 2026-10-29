@@ -11,6 +11,7 @@
 #include "mscl/Communication/Devices.h"
 #include "mscl/Exceptions.h"
 #include "mscl/MicroStrain/Wireless/BaseStation.h"
+#include "mscl/MicroStrain/Wireless/Configuration/BaseStationConfig.h"
 #include "mscl/MicroStrain/Wireless/Configuration/ConfigIssue.h"
 #include "mscl/MicroStrain/Wireless/Configuration/WirelessNodeConfig.h"
 #include "mscl/MicroStrain/Wireless/DatalogDownloader.h"
@@ -67,6 +68,10 @@ struct mscl_datalog_downloader {
 
     uint32_t node_address;
     mscl::DatalogDownloader downloader;
+};
+
+struct mscl_base_station_config {
+    mscl::BaseStationConfig config;
 };
 
 // The C enums reuse MSCL's values, so converting is a cast. These checks
@@ -603,6 +608,36 @@ mscl_status mscl_base_station_get_beacon_status(
     });
 }
 
+mscl_status mscl_base_station_get_communication_protocol(
+    mscl_base_station *base_station,
+    mscl_comm_protocol *protocol
+)
+{
+    if (base_station == nullptr || protocol == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *protocol = static_cast<mscl_comm_protocol>(
+            base_station->base.communicationProtocol()
+        );
+    });
+}
+
+mscl_status mscl_base_station_get_transmit_power(
+    mscl_base_station *base_station,
+    mscl_transmit_power *power
+)
+{
+    if (base_station == nullptr || power == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *power = static_cast<mscl_transmit_power>(
+            base_station->base.getTransmitPower()
+        );
+    });
+}
+
 mscl_status mscl_base_station_get_button_long_press(
     mscl_base_station *base_station,
     uint8_t button_number,
@@ -634,6 +669,78 @@ mscl_status mscl_base_station_get_button_short_press(
             base_station->base.getButtonShortPress(button_number);
         button->command = static_cast<mscl_button_command>(result.command());
         button->node_address = result.nodeAddress();
+    });
+}
+
+mscl_status mscl_base_station_get_analog_pairing_enabled(
+    mscl_base_station *base_station,
+    bool *enabled
+)
+{
+    if (base_station == nullptr || enabled == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *enabled = base_station->base.getAnalogPairingEnabled();
+    });
+}
+
+mscl_status mscl_base_station_get_analog_timeout_time(
+    mscl_base_station *base_station,
+    uint16_t *seconds
+)
+{
+    if (base_station == nullptr || seconds == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *seconds = base_station->base.getAnalogTimeoutTime();
+    });
+}
+
+mscl_status mscl_base_station_get_analog_timeout_voltage(
+    mscl_base_station *base_station,
+    float *voltage
+)
+{
+    if (base_station == nullptr || voltage == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *voltage = base_station->base.getAnalogTimeoutVoltage();
+    });
+}
+
+mscl_status mscl_base_station_get_analog_exceedance_enabled(
+    mscl_base_station *base_station,
+    bool *enabled
+)
+{
+    if (base_station == nullptr || enabled == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *enabled = base_station->base.getAnalogExceedanceEnabled();
+    });
+}
+
+mscl_status mscl_base_station_get_analog_pair(
+    mscl_base_station *base_station,
+    uint8_t port_number,
+    mscl_base_station_analog_pair *pair
+)
+{
+    if (base_station == nullptr || pair == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::BaseStationAnalogPair result =
+            base_station->base.getAnalogPair(port_number);
+        pair->node_address = result.nodeAddress();
+        pair->node_channel = result.nodeChannel();
+        pair->expect_float_data = result.expectFloatData();
+        pair->output_0v = result.outputVal_0V();
+        pair->output_3v = result.outputVal_3V();
     });
 }
 
@@ -694,6 +801,46 @@ void mscl_sweeps_free(mscl_sweep *sweeps, size_t count)
         std::free(sweeps[i].points);
     }
     std::free(sweeps);
+}
+
+mscl_status mscl_base_station_verify_config(
+    mscl_base_station *base_station,
+    const mscl_base_station_config *config,
+    bool *ok,
+    char *issues,
+    size_t issues_len
+)
+{
+    if (base_station == nullptr || config == nullptr || ok == nullptr) {
+        return fail_null(__func__);
+    }
+    if (issues != nullptr && issues_len > 0) {
+        issues[0] = '\0';
+    }
+    return call([&] {
+        mscl::ConfigIssues found;
+        *ok = base_station->base.verifyConfig(config->config, found);
+        if (issues == nullptr || issues_len == 0) {
+            return;
+        }
+        std::string text;
+        for (const mscl::ConfigIssue &issue : found) {
+            text += issue.description();
+            text += '\n';
+        }
+        copy_string(issues, issues_len, text);
+    });
+}
+
+mscl_status mscl_base_station_apply_config(
+    mscl_base_station *base_station,
+    const mscl_base_station_config *config
+)
+{
+    if (base_station == nullptr || config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.applyConfig(config->config); });
 }
 
 mscl_status mscl_base_station_get_features(
@@ -937,6 +1084,292 @@ mscl_status mscl_base_station_features_get_min_transmit_power(
                 static_cast<WirelessTypes::RegionCode>(region),
                 static_cast<WirelessTypes::CommProtocol>(comm_protocol)
             )
+        );
+    });
+}
+
+mscl_status mscl_base_station_config_create(mscl_base_station_config **config)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    *config = nullptr;
+    return call([&] { *config = new mscl_base_station_config(); });
+}
+
+void mscl_base_station_config_destroy(mscl_base_station_config *config)
+{
+    delete config;
+}
+
+mscl_status mscl_base_station_config_get_transmit_power(
+    const mscl_base_station_config *config,
+    mscl_transmit_power *power
+)
+{
+    if (config == nullptr || power == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *power =
+            static_cast<mscl_transmit_power>(config->config.transmitPower());
+    });
+}
+
+mscl_status mscl_base_station_config_set_transmit_power(
+    mscl_base_station_config *config,
+    mscl_transmit_power power
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        config->config.transmitPower(
+            static_cast<WirelessTypes::TransmitPower>(power)
+        );
+    });
+}
+
+mscl_status mscl_base_station_config_get_communication_protocol(
+    const mscl_base_station_config *config,
+    mscl_comm_protocol *protocol
+)
+{
+    if (config == nullptr || protocol == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *protocol = static_cast<mscl_comm_protocol>(
+            config->config.communicationProtocol()
+        );
+    });
+}
+
+mscl_status mscl_base_station_config_set_communication_protocol(
+    mscl_base_station_config *config,
+    mscl_comm_protocol protocol
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        config->config.communicationProtocol(
+            static_cast<WirelessTypes::CommProtocol>(protocol)
+        );
+    });
+}
+
+mscl_status mscl_base_station_config_get_button_long_press(
+    const mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button *button
+)
+{
+    if (config == nullptr || button == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::BaseStationButton result =
+            config->config.buttonLongPress(button_number);
+        button->command = static_cast<mscl_button_command>(result.command());
+        button->node_address = result.nodeAddress();
+    });
+}
+
+mscl_status mscl_base_station_config_set_button_long_press(
+    mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button button
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        config->config.buttonLongPress(
+            button_number,
+            mscl::BaseStationButton(
+                static_cast<mscl::BaseStationButton::Command>(button.command),
+                button.node_address
+            )
+        );
+    });
+}
+
+mscl_status mscl_base_station_config_get_button_short_press(
+    const mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button *button
+)
+{
+    if (config == nullptr || button == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::BaseStationButton result =
+            config->config.buttonShortPress(button_number);
+        button->command = static_cast<mscl_button_command>(result.command());
+        button->node_address = result.nodeAddress();
+    });
+}
+
+mscl_status mscl_base_station_config_set_button_short_press(
+    mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button button
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        config->config.buttonShortPress(
+            button_number,
+            mscl::BaseStationButton(
+                static_cast<mscl::BaseStationButton::Command>(button.command),
+                button.node_address
+            )
+        );
+    });
+}
+
+mscl_status mscl_base_station_config_get_analog_pairing_enable(
+    const mscl_base_station_config *config,
+    bool *enable
+)
+{
+    if (config == nullptr || enable == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *enable = config->config.analogPairingEnable(); });
+}
+
+mscl_status mscl_base_station_config_set_analog_pairing_enable(
+    mscl_base_station_config *config,
+    bool enable
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { config->config.analogPairingEnable(enable); });
+}
+
+mscl_status mscl_base_station_config_get_analog_timeout_time(
+    const mscl_base_station_config *config,
+    uint16_t *seconds
+)
+{
+    if (config == nullptr || seconds == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *seconds = config->config.analogTimeoutTime(); });
+}
+
+mscl_status mscl_base_station_config_set_analog_timeout_time(
+    mscl_base_station_config *config,
+    uint16_t seconds
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { config->config.analogTimeoutTime(seconds); });
+}
+
+mscl_status mscl_base_station_config_get_analog_timeout_voltage(
+    const mscl_base_station_config *config,
+    float *voltage
+)
+{
+    if (config == nullptr || voltage == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *voltage = config->config.analogTimeoutVoltage(); });
+}
+
+mscl_status mscl_base_station_config_set_analog_timeout_voltage(
+    mscl_base_station_config *config,
+    float voltage
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { config->config.analogTimeoutVoltage(voltage); });
+}
+
+mscl_status mscl_base_station_config_get_analog_exceedance_enable(
+    const mscl_base_station_config *config,
+    bool *enable
+)
+{
+    if (config == nullptr || enable == nullptr) {
+        return fail_null(__func__);
+    }
+    // MSCL's getter is not const, although it only reads.
+    return call([&] {
+        *enable = const_cast<mscl::BaseStationConfig &>(config->config)
+                      .analogExceedanceEnable();
+    });
+}
+
+mscl_status mscl_base_station_config_set_analog_exceedance_enable(
+    mscl_base_station_config *config,
+    bool enable
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { config->config.analogExceedanceEnable(enable); });
+}
+
+mscl_status mscl_base_station_config_get_analog_pairing(
+    const mscl_base_station_config *config,
+    uint8_t port_number,
+    mscl_base_station_analog_pair *pair
+)
+{
+    if (config == nullptr || pair == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::BaseStationAnalogPair result =
+            config->config.analogPairing(port_number);
+        pair->node_address = result.nodeAddress();
+        pair->node_channel = result.nodeChannel();
+        pair->expect_float_data = result.expectFloatData();
+        pair->output_0v = result.outputVal_0V();
+        pair->output_3v = result.outputVal_3V();
+    });
+}
+
+mscl_status mscl_base_station_config_set_analog_pairing(
+    mscl_base_station_config *config,
+    uint8_t port_number,
+    mscl_base_station_analog_pair pair
+)
+{
+    if (config == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        config->config.analogPairing(
+            port_number,
+            pair.expect_float_data
+                ? mscl::BaseStationAnalogPair::Float(
+                      pair.node_address,
+                      pair.node_channel,
+                      pair.output_0v,
+                      pair.output_3v
+                  )
+                : mscl::BaseStationAnalogPair::NonFloat(
+                      pair.node_address,
+                      pair.node_channel
+                  )
         );
     });
 }

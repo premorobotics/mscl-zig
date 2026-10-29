@@ -203,6 +203,7 @@ typedef struct mscl_node_config mscl_node_config;
 typedef struct mscl_sync_network mscl_sync_network;
 typedef struct mscl_datalog_downloader mscl_datalog_downloader;
 typedef struct mscl_base_station_features mscl_base_station_features;
+typedef struct mscl_base_station_config mscl_base_station_config;
 
 typedef struct mscl_device_info {
     /* The key MSCL lists the device under. */
@@ -223,6 +224,14 @@ typedef struct mscl_base_station_button {
     mscl_button_command command;
     uint16_t node_address;
 } mscl_base_station_button;
+
+typedef struct mscl_base_station_analog_pair {
+    uint16_t node_address;
+    uint8_t node_channel;
+    bool expect_float_data;
+    float output_0v;
+    float output_3v;
+} mscl_base_station_analog_pair;
 
 typedef struct mscl_ping_result {
     bool success;
@@ -319,6 +328,14 @@ EXTERN_C mscl_status mscl_base_station_get_beacon_status(
     mscl_base_station *base_station,
     mscl_beacon_status *status
 );
+EXTERN_C mscl_status mscl_base_station_get_communication_protocol(
+    mscl_base_station *base_station,
+    mscl_comm_protocol *protocol
+);
+EXTERN_C mscl_status mscl_base_station_get_transmit_power(
+    mscl_base_station *base_station,
+    mscl_transmit_power *power
+);
 EXTERN_C mscl_status mscl_base_station_get_button_long_press(
     mscl_base_station *base_station,
     uint8_t button_number,
@@ -328,6 +345,27 @@ EXTERN_C mscl_status mscl_base_station_get_button_short_press(
     mscl_base_station *base_station,
     uint8_t button_number,
     mscl_base_station_button *button
+);
+EXTERN_C mscl_status mscl_base_station_get_analog_pairing_enabled(
+    mscl_base_station *base_station,
+    bool *enabled
+);
+EXTERN_C mscl_status mscl_base_station_get_analog_timeout_time(
+    mscl_base_station *base_station,
+    uint16_t *seconds
+);
+EXTERN_C mscl_status mscl_base_station_get_analog_timeout_voltage(
+    mscl_base_station *base_station,
+    float *voltage
+);
+EXTERN_C mscl_status mscl_base_station_get_analog_exceedance_enabled(
+    mscl_base_station *base_station,
+    bool *enabled
+);
+EXTERN_C mscl_status mscl_base_station_get_analog_pair(
+    mscl_base_station *base_station,
+    uint8_t port_number,
+    mscl_base_station_analog_pair *pair
 );
 /* Strings are truncated to fit their buffer, whose length is given. */
 EXTERN_C mscl_status mscl_base_station_get_name(
@@ -347,6 +385,21 @@ EXTERN_C mscl_status mscl_base_station_get_data(
     size_t *count
 );
 EXTERN_C void mscl_sweeps_free(mscl_sweep *sweeps, size_t count);
+/*
+ * Checks config against the base station. When it is not valid, *ok is false
+ * and issues receives one line per problem, truncated to issues_len.
+ */
+EXTERN_C mscl_status mscl_base_station_verify_config(
+    mscl_base_station *base_station,
+    const mscl_base_station_config *config,
+    bool *ok,
+    char *issues,
+    size_t issues_len
+);
+EXTERN_C mscl_status mscl_base_station_apply_config(
+    mscl_base_station *base_station,
+    const mscl_base_station_config *config
+);
 /* Owned by the base station; valid until it is closed. */
 EXTERN_C mscl_status mscl_base_station_get_features(
     mscl_base_station *base_station,
@@ -429,6 +482,93 @@ EXTERN_C mscl_status mscl_base_station_features_get_min_transmit_power(
     mscl_region_code region,
     mscl_comm_protocol comm_protocol,
     mscl_transmit_power *power
+);
+
+/* Settings to write to a base station. Settings left unset are not changed. */
+EXTERN_C mscl_status mscl_base_station_config_create(
+    mscl_base_station_config **config
+);
+EXTERN_C void mscl_base_station_config_destroy(
+    mscl_base_station_config *config
+);
+EXTERN_C mscl_status mscl_base_station_config_get_transmit_power(
+    const mscl_base_station_config *config,
+    mscl_transmit_power *power
+);
+EXTERN_C mscl_status mscl_base_station_config_set_transmit_power(
+    mscl_base_station_config *config,
+    mscl_transmit_power power
+);
+EXTERN_C mscl_status mscl_base_station_config_get_communication_protocol(
+    const mscl_base_station_config *config,
+    mscl_comm_protocol *protocol
+);
+EXTERN_C mscl_status mscl_base_station_config_set_communication_protocol(
+    mscl_base_station_config *config,
+    mscl_comm_protocol protocol
+);
+EXTERN_C mscl_status mscl_base_station_config_get_button_long_press(
+    const mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button *button
+);
+EXTERN_C mscl_status mscl_base_station_config_set_button_long_press(
+    mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button button
+);
+EXTERN_C mscl_status mscl_base_station_config_get_button_short_press(
+    const mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button *button
+);
+EXTERN_C mscl_status mscl_base_station_config_set_button_short_press(
+    mscl_base_station_config *config,
+    uint8_t button_number,
+    mscl_base_station_button button
+);
+EXTERN_C mscl_status mscl_base_station_config_get_analog_pairing_enable(
+    const mscl_base_station_config *config,
+    bool *enable
+);
+EXTERN_C mscl_status mscl_base_station_config_set_analog_pairing_enable(
+    mscl_base_station_config *config,
+    bool enable
+);
+EXTERN_C mscl_status mscl_base_station_config_get_analog_timeout_time(
+    const mscl_base_station_config *config,
+    uint16_t *seconds
+);
+EXTERN_C mscl_status mscl_base_station_config_set_analog_timeout_time(
+    mscl_base_station_config *config,
+    uint16_t seconds
+);
+EXTERN_C mscl_status mscl_base_station_config_get_analog_timeout_voltage(
+    const mscl_base_station_config *config,
+    float *voltage
+);
+EXTERN_C mscl_status mscl_base_station_config_set_analog_timeout_voltage(
+    mscl_base_station_config *config,
+    float voltage
+);
+EXTERN_C mscl_status mscl_base_station_config_get_analog_exceedance_enable(
+    const mscl_base_station_config *config,
+    bool *enable
+);
+EXTERN_C mscl_status mscl_base_station_config_set_analog_exceedance_enable(
+    mscl_base_station_config *config,
+    bool enable
+);
+EXTERN_C mscl_status mscl_base_station_config_get_analog_pairing(
+    const mscl_base_station_config *config,
+    uint8_t port_number,
+    mscl_base_station_analog_pair *pair
+);
+/* output_0v and output_3v are used only when expect_float_data is true. */
+EXTERN_C mscl_status mscl_base_station_config_set_analog_pairing(
+    mscl_base_station_config *config,
+    uint8_t port_number,
+    mscl_base_station_analog_pair pair
 );
 
 EXTERN_C mscl_status mscl_node_create(
