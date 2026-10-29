@@ -525,6 +525,36 @@ mscl_status mscl_base_station_disable_beacon(mscl_base_station *base_station)
     return call([&] { base_station->base.disableBeacon(); });
 }
 
+mscl_status mscl_base_station_enable_beacon_at(
+    mscl_base_station *base_station,
+    uint32_t utc_time_s,
+    uint64_t *beacon_time_ns
+)
+{
+    if (base_station == nullptr || beacon_time_ns == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        *beacon_time_ns =
+            base_station->base.enableBeacon(utc_time_s).nanoseconds();
+    });
+}
+
+mscl_status mscl_base_station_get_beacon_status(
+    mscl_base_station *base_station,
+    mscl_beacon_status *status
+)
+{
+    if (base_station == nullptr || status == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        mscl::BeaconStatus result = base_station->base.beaconStatus();
+        status->enabled = result.enabled();
+        status->timestamp_ns = result.timestamp().nanoseconds();
+    });
+}
+
 mscl_status mscl_base_station_get_button_long_press(
     mscl_base_station *base_station,
     uint8_t button_number,

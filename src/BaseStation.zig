@@ -37,6 +37,13 @@ pub const Button = struct {
     };
 };
 
+/// Represents the status of a BaseStation beacon.
+pub const BeaconStatus = struct {
+    enabled: bool,
+    /// Nanoseconds since the Unix epoch.
+    timestamp_ns: u64,
+};
+
 /// Opens the base station on `port`. USB base stations use a baud rate of
 /// 3000000.
 pub fn init(port: [*:0]const u8, baud_rate: u32) Error!BaseStation {
@@ -91,8 +98,8 @@ pub fn getRetries(self: BaseStation) u8 {
     return retries;
 }
 
-/// Starts the beacon from the system time (UTC) and returns that time in
-/// nanoseconds since the Unix epoch.
+/// Enables the beacon on the base station using the system time (UTC) as its
+/// starting timestamp.
 pub fn enableBeacon(self: BaseStation) Error!u64 {
     var beacon_time_ns: u64 = 0;
     const status = root.mscl.mscl_base_station_enable_beacon(
@@ -112,6 +119,28 @@ pub fn enableBeacon(self: BaseStation) Error!u64 {
     };
 }
 
+/// Enables the beacon on the base station using the given UTC timestamp.
+pub fn enableBeaconAt(self: BaseStation, utc_time_s: u32) Error!u64 {
+    var beacon_time_ns: u64 = 0;
+    const status = root.mscl.mscl_base_station_enable_beacon_at(
+        self.handle,
+        utc_time_s,
+        &beacon_time_ns,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => beacon_time_ns,
+        // A connection error has occurred with the BaseStation
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // The enable beacon command has failed.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Disables the beacon on the base station.
 pub fn disableBeacon(self: BaseStation) Error!void {
     const status = root.mscl.mscl_base_station_disable_beacon(self.handle);
     return switch (status) {
@@ -120,6 +149,31 @@ pub fn disableBeacon(self: BaseStation) Error!void {
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         // The disable beacon command has failed.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the BeaconStatus of the beacon on the base station.
+pub fn getBeaconStatus(self: BaseStation) Error!BeaconStatus {
+    var beacon_status: root.mscl.mscl_beacon_status = undefined;
+    const status = root.mscl.mscl_base_station_get_beacon_status(
+        self.handle,
+        &beacon_status,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .enabled = beacon_status.enabled,
+            .timestamp_ns = beacon_status.timestamp_ns,
+        },
+        // Beacon Status is not supported by this BaseStation.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to get the beacon status.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         else => mscl: {
             std.log.err("{s}", .{root.mscl.mscl_last_error()});
             break :mscl Error.MsclFailure;

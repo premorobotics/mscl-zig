@@ -192,6 +192,12 @@ typedef struct mscl_device_info {
     mscl_connection_type connection_type;
 } mscl_device_info;
 
+typedef struct mscl_beacon_status {
+    bool enabled;
+    /* Nanoseconds since the Unix epoch. */
+    uint64_t timestamp_ns;
+} mscl_beacon_status;
+
 typedef struct mscl_base_station_button {
     mscl_button_command command;
     uint16_t node_address;
@@ -281,6 +287,16 @@ EXTERN_C mscl_status mscl_base_station_enable_beacon(
 );
 EXTERN_C mscl_status mscl_base_station_disable_beacon(
     mscl_base_station *base_station
+);
+/* utc_time_s is in seconds since the Unix epoch. */
+EXTERN_C mscl_status mscl_base_station_enable_beacon_at(
+    mscl_base_station *base_station,
+    uint32_t utc_time_s,
+    uint64_t *beacon_time_ns
+);
+EXTERN_C mscl_status mscl_base_station_get_beacon_status(
+    mscl_base_station *base_station,
+    mscl_beacon_status *status
 );
 EXTERN_C mscl_status mscl_base_station_get_button_long_press(
     mscl_base_station *base_station,
