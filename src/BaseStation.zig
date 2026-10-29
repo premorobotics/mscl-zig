@@ -12,6 +12,19 @@ handle: *root.mscl.mscl_base_station,
 features: ?Features,
 /// Information read from this BaseStation when it is initialized.
 state: State,
+/// The timeout, in milliseconds, to use when waiting for responses from
+/// commands.
+/// This timeout is used directly for BaseStation commands, while some
+/// additional time is added for Node commands.
+/// `setTimeout` updates it.
+timeout: u64,
+/// The number of retry attempts for reading and writing config options on the
+/// BaseStation. By default, the number of retries is 0.
+/// Note: The timeout that is set per command will be per read and write
+/// attempt, meaning this retry number is multiplied by the timeout for your
+/// overall timeout.
+/// `setRetries` updates it.
+retries: u8,
 
 pub const Error = error{
     Connection,
@@ -108,8 +121,12 @@ pub fn init(
         .handle = handle.?,
         .features = null,
         .state = std.mem.zeroInit(State, .{}),
+        .timeout = 0,
+        .retries = 0,
     };
     errdefer result.deinit(gpa);
+    result.timeout = result.getTimeout();
+    result.retries = result.getRetries();
 
     result.features =
         Features.init(gpa, result.handle) catch |err| switch (err) {
@@ -160,22 +177,24 @@ pub fn ping(self: BaseStation) Error!bool {
 /// Note: The timeout that is set per command will be per read and write
 /// attempt, meaning this retry number is multiplied by the timeout for your
 /// overall timeout.
-pub fn setRetries(self: BaseStation, retries: u8) void {
+/// Updates `retries`.
+pub fn setRetries(self: *BaseStation, retries: u8) void {
     _ = root.mscl.mscl_base_station_set_retries(
         self.handle,
         retries,
     );
+    self.retries = self.getRetries();
 }
 
-/// Gets the number of retry attempts for reading and writing config options on
-/// the BaseStation. By default, the number of retries is 0.
-/// Note: The timeout that is set per command will be per read and write
-/// attempt, meaning this retry number is multiplied by the timeout for your
-/// overall timeout.
-pub fn getRetries(self: BaseStation) u8 {
-    var retries: u8 = 0;
-    _ = root.mscl.mscl_base_station_get_retries(self.handle, &retries);
-    return retries;
+/// Sets the timeout to use when waiting for responses from commands.
+/// This timeout is used directly for BaseStation commands, while some
+/// additional time is added for Node commands.
+/// Note: Some commands have a minimum timeout that will override this if set
+/// lower than the minimum.
+/// Updates `timeout`.
+pub fn setTimeout(self: *BaseStation, timeout_ms: u64) void {
+    _ = root.mscl.mscl_base_station_set_timeout(self.handle, timeout_ms);
+    self.timeout = self.getTimeout();
 }
 
 /// Enables the beacon on the base station using the system time (UTC) as its
@@ -866,4 +885,27 @@ fn beaconStatus(self: BaseStation) Error!?BeaconStatus {
             break :mscl Error.MsclFailure;
         },
     };
+}
+
+/// Gets the number of retry attempts for reading and writing config options on
+/// the BaseStation. By default, the number of retries is 0.
+/// Note: The timeout that is set per command will be per read and write
+/// attempt, meaning this retry number is multiplied by the timeout for your
+/// overall timeout.
+fn getRetries(self: BaseStation) u8 {
+    var retries: u8 = 0;
+    _ = root.mscl.mscl_base_station_get_retries(self.handle, &retries);
+    return retries;
+}
+
+/// Gets the current timeout to use when waiting for responses from base
+/// station commands.
+/// This timeout is used directly for BaseStation commands, while some
+/// additional time is added for Node commands.
+/// Note: Some commands have a minimum timeout that will override this if set
+/// lower than the minimum.
+fn getTimeout(self: BaseStation) u64 {
+    var timeout_ms: u64 = 0;
+    _ = root.mscl.mscl_base_station_get_timeout(self.handle, &timeout_ms);
+    return timeout_ms;
 }

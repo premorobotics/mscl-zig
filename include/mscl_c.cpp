@@ -638,6 +638,28 @@ mscl_status mscl_base_station_get_retries(
     return call([&] { *retries = base_station->base.readWriteRetries(); });
 }
 
+mscl_status mscl_base_station_set_timeout(
+    mscl_base_station *base_station,
+    uint64_t timeout_ms
+)
+{
+    if (base_station == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { base_station->base.timeout(timeout_ms); });
+}
+
+mscl_status mscl_base_station_get_timeout(
+    mscl_base_station *base_station,
+    uint64_t *timeout_ms
+)
+{
+    if (base_station == nullptr || timeout_ms == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] { *timeout_ms = base_station->base.timeout(); });
+}
+
 mscl_status mscl_base_station_enable_beacon(
     mscl_base_station *base_station,
     uint64_t *beacon_time_ns
