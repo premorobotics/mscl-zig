@@ -40,4 +40,58 @@ pub fn build(b: *std.Build) void {
         "Print the features of the first attached base station",
     );
     features_step.dependOn(&b.addRunArtifact(features_exe).step);
+
+    const config_exe = b.addExecutable(.{
+        .name = "print_config",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/print_config.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "mscl_zig", .module = mscl_zig.module("mscl_zig") },
+            },
+        }),
+    });
+    b.installArtifact(config_exe);
+    const config_step = b.step(
+        "print_config",
+        "Print the config currently set on the first attached base station",
+    );
+    config_step.dependOn(&b.addRunArtifact(config_exe).step);
+
+    const state_exe = b.addExecutable(.{
+        .name = "print_state",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/print_state.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "mscl_zig", .module = mscl_zig.module("mscl_zig") },
+            },
+        }),
+    });
+    b.installArtifact(state_exe);
+    const state_step = b.step(
+        "print_state",
+        "Print the state of the first attached base station",
+    );
+    state_step.dependOn(&b.addRunArtifact(state_exe).step);
+
+    const base_station_exe = b.addExecutable(.{
+        .name = "print_base_station",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/print_base_station.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "mscl_zig", .module = mscl_zig.module("mscl_zig") },
+            },
+        }),
+    });
+    b.installArtifact(base_station_exe);
+    const base_station_step = b.step(
+        "print_base_station",
+        "Print everything about the first attached base station",
+    );
+    base_station_step.dependOn(&b.addRunArtifact(base_station_exe).step);
 }
