@@ -216,6 +216,43 @@ MSCL_C_SAME(
 );
 MSCL_C_SAME(MSCL_CONNECTION_TYPE_TCP, mscl::DeviceInfo::connectionType_tcp);
 
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_NODE_SLEEP,
+    mscl::BaseStationButton::btn_nodeSleep
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_NODE_STOP,
+    mscl::BaseStationButton::btn_nodeStop
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_ENABLE_BEACON,
+    mscl::BaseStationButton::btn_enableBeacon
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_DISABLE_BEACON,
+    mscl::BaseStationButton::btn_disableBeacon
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_NODE_NON_SYNC_SAMPLING,
+    mscl::BaseStationButton::btn_nodeNonSyncSampling
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_NODE_SYNC_SAMPLING,
+    mscl::BaseStationButton::btn_nodeSyncSampling
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_NODE_ARMED_DATALOGGING,
+    mscl::BaseStationButton::btn_nodeArmedDatalogging
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_CYCLE_POWER,
+    mscl::BaseStationButton::btn_cyclePower
+);
+MSCL_C_SAME(
+    MSCL_BUTTON_COMMAND_DISABLED,
+    mscl::BaseStationButton::btn_disabled
+);
+
 #undef MSCL_C_SAME
 
 namespace {
@@ -486,6 +523,40 @@ mscl_status mscl_base_station_disable_beacon(mscl_base_station *base_station)
         return fail_null(__func__);
     }
     return call([&] { base_station->base.disableBeacon(); });
+}
+
+mscl_status mscl_base_station_get_button_long_press(
+    mscl_base_station *base_station,
+    uint8_t button_number,
+    mscl_base_station_button *button
+)
+{
+    if (base_station == nullptr || button == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::BaseStationButton result =
+            base_station->base.getButtonLongPress(button_number);
+        button->command = static_cast<mscl_button_command>(result.command());
+        button->node_address = result.nodeAddress();
+    });
+}
+
+mscl_status mscl_base_station_get_button_short_press(
+    mscl_base_station *base_station,
+    uint8_t button_number,
+    mscl_base_station_button *button
+)
+{
+    if (base_station == nullptr || button == nullptr) {
+        return fail_null(__func__);
+    }
+    return call([&] {
+        const mscl::BaseStationButton result =
+            base_station->base.getButtonShortPress(button_number);
+        button->command = static_cast<mscl_button_command>(result.command());
+        button->node_address = result.nodeAddress();
+    });
 }
 
 mscl_status mscl_base_station_get_data(

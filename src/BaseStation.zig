@@ -9,8 +9,32 @@ pub const Error = error{
     Connection,
     InvalidSerialPort,
     Communication,
+    NotSupported,
     /// Any other failure; `root.mscl.mscl_last_error()` describes it.
     MsclFailure,
+};
+
+/// Represents a single button on a BaseStation
+pub const Button = struct {
+    command: Command,
+    node_address: u16,
+
+    /// Represents the types of commands that a BaseStationButton can
+    /// perform.
+    pub const Command = enum(root.mscl.mscl_button_command) {
+        node_sleep = root.mscl.MSCL_BUTTON_COMMAND_NODE_SLEEP,
+        node_stop = root.mscl.MSCL_BUTTON_COMMAND_NODE_STOP,
+        enable_beacon = root.mscl.MSCL_BUTTON_COMMAND_ENABLE_BEACON,
+        disable_beacon = root.mscl.MSCL_BUTTON_COMMAND_DISABLE_BEACON,
+        node_non_sync_sampling =
+            root.mscl.MSCL_BUTTON_COMMAND_NODE_NON_SYNC_SAMPLING,
+        node_sync_sampling = root.mscl.MSCL_BUTTON_COMMAND_NODE_SYNC_SAMPLING,
+        node_armed_datalogging =
+            root.mscl.MSCL_BUTTON_COMMAND_NODE_ARMED_DATALOGGING,
+        cycle_power = root.mscl.MSCL_BUTTON_COMMAND_CYCLE_POWER,
+        disabled = root.mscl.MSCL_BUTTON_COMMAND_DISABLED,
+        _,
+    };
 };
 
 /// Opens the base station on `port`. USB base stations use a baud rate of
@@ -96,6 +120,60 @@ pub fn disableBeacon(self: BaseStation) Error!void {
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         // The disable beacon command has failed.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the button settings for a long press action that are currently set
+/// on the BaseStation.
+pub fn getButtonLongPress(self: BaseStation, button_number: u8) Error!Button {
+    var button: root.mscl.mscl_base_station_button = undefined;
+    const status = root.mscl.mscl_base_station_get_button_long_press(
+        self.handle,
+        button_number,
+        &button,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .command = @fromBackingInt(button.command),
+            .node_address = button.node_address,
+        },
+        // The BaseStation does not support the requested button.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the button settings for a short press action that are currently set
+/// on the BaseStation.
+pub fn getButtonShortPress(self: BaseStation, button_number: u8) Error!Button {
+    var button: root.mscl.mscl_base_station_button = undefined;
+    const status = root.mscl.mscl_base_station_get_button_short_press(
+        self.handle,
+        button_number,
+        &button,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .command = @fromBackingInt(button.command),
+            .node_address = button.node_address,
+        },
+        // The BaseStation does not support the requested button.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         else => mscl: {
             std.log.err("{s}", .{root.mscl.mscl_last_error()});
             break :mscl Error.MsclFailure;

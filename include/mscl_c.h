@@ -165,6 +165,18 @@ typedef enum mscl_connection_type {
     MSCL_CONNECTION_TYPE_TCP = 1
 } mscl_connection_type;
 
+typedef enum mscl_button_command {
+    MSCL_BUTTON_COMMAND_NODE_SLEEP = 0,
+    MSCL_BUTTON_COMMAND_NODE_STOP = 1,
+    MSCL_BUTTON_COMMAND_ENABLE_BEACON = 2,
+    MSCL_BUTTON_COMMAND_DISABLE_BEACON = 3,
+    MSCL_BUTTON_COMMAND_NODE_NON_SYNC_SAMPLING = 4,
+    MSCL_BUTTON_COMMAND_NODE_SYNC_SAMPLING = 5,
+    MSCL_BUTTON_COMMAND_NODE_ARMED_DATALOGGING = 6,
+    MSCL_BUTTON_COMMAND_CYCLE_POWER = 7,
+    MSCL_BUTTON_COMMAND_DISABLED = 65535
+} mscl_button_command;
+
 typedef struct mscl_base_station mscl_base_station;
 typedef struct mscl_node mscl_node;
 typedef struct mscl_node_config mscl_node_config;
@@ -179,6 +191,11 @@ typedef struct mscl_device_info {
     uint32_t baud_rate;
     mscl_connection_type connection_type;
 } mscl_device_info;
+
+typedef struct mscl_base_station_button {
+    mscl_button_command command;
+    uint16_t node_address;
+} mscl_base_station_button;
 
 typedef struct mscl_ping_result {
     bool success;
@@ -264,6 +281,16 @@ EXTERN_C mscl_status mscl_base_station_enable_beacon(
 );
 EXTERN_C mscl_status mscl_base_station_disable_beacon(
     mscl_base_station *base_station
+);
+EXTERN_C mscl_status mscl_base_station_get_button_long_press(
+    mscl_base_station *base_station,
+    uint8_t button_number,
+    mscl_base_station_button *button
+);
+EXTERN_C mscl_status mscl_base_station_get_button_short_press(
+    mscl_base_station *base_station,
+    uint8_t button_number,
+    mscl_base_station_button *button
 );
 /*
  * Sweeps collected since the last call, waiting up to timeout_ms for the
