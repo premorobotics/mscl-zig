@@ -589,6 +589,21 @@ mscl_status mscl_base_station_get_button_short_press(
     });
 }
 
+mscl_status mscl_base_station_get_name(
+    mscl_base_station *base_station,
+    char *name,
+    size_t name_len
+)
+{
+    if (base_station == nullptr || name == nullptr) {
+        return fail_null(__func__);
+    }
+    copy_string(name, name_len, "");
+    return call([&] {
+        copy_string(name, name_len, base_station->base.name());
+    });
+}
+
 mscl_status mscl_base_station_get_data(
     mscl_base_station *base_station,
     uint32_t timeout_ms,

@@ -234,3 +234,43 @@ pub fn getButtonShortPress(self: BaseStation, button_number: u8) Error!Button {
         },
     };
 }
+
+/// Gets the name of the BaseStation. This is the universal basestation name
+/// that should be used for SensorCloud.
+/// This is the same as calling BaseStation::deviceName.
+/// The name is written into `buffer`, truncated to fit.
+pub fn name(self: BaseStation, buffer: []u8) Error![]u8 {
+    const status = root.mscl.mscl_base_station_get_name(
+        self.handle,
+        buffer.ptr,
+        buffer.len,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => std.mem.sliceTo(buffer, 0),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read the value from the BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the name of the BaseStation. This is the universal basestation name
+/// that should be used for SensorCloud.
+/// This is the same as calling BaseStation::deviceName.
+/// Free the result with `gpa.free`.
+pub fn nameAlloc(
+    self: BaseStation,
+    gpa: std.mem.Allocator,
+) (Error || std.mem.Allocator.Error)![]u8 {
+    // MSCL's name is "base-" and the serial, at most 5 + 21 characters, so it
+    // always fits.
+    var buffer: [32]u8 = undefined;
+    return gpa.dupe(u8, try self.name(&buffer));
+}

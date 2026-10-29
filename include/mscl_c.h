@@ -308,6 +308,12 @@ EXTERN_C mscl_status mscl_base_station_get_button_short_press(
     uint8_t button_number,
     mscl_base_station_button *button
 );
+/* Strings are truncated to fit their buffer, whose length is given. */
+EXTERN_C mscl_status mscl_base_station_get_name(
+    mscl_base_station *base_station,
+    char *name,
+    size_t name_len
+);
 /*
  * Sweeps collected since the last call, waiting up to timeout_ms for the
  * first one. max_sweeps of 0 returns all of them. Free with mscl_sweeps_free.
