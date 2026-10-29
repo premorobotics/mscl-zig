@@ -12,5 +12,6 @@
         "build.zig",
         "build.zig.zon",
         "list_base_stations.zig",
+        "print_features.zig",
     },
 }
