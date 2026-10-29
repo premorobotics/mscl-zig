@@ -2,7 +2,7 @@
 
 Zig bindings for [MSCL by HBK-MicroStrain](https://github.com/HBK-MicroStrain/MSCL)
 
-This package build MSCL by Zig. The MSCL used by this package is not MSCL upstream, but a fork to ensure it is buildable by zig ([fork](https://github.com/premorobotics/MSCL/tree/main)).
+This package sbuild MSCL by Zig. The MSCL used by this package is not MSCL upstream, but a [fork](https://github.com/premorobotics/MSCL/tree/main) to ensure it is buildable by zig.
 
 Supported functionality:
 - MSCL/Wireless (bindings development in progress)
