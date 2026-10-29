@@ -9,7 +9,7 @@ pub const Error = error{
     /// Any other failure; `mscl.mscl_last_error()` describes it.
     Failed,
 };
-const _ = 1;
+
 /// How a device is connected to this computer.
 pub const ConnectionType = enum(mscl.mscl_connection_type) {
     serial = mscl.MSCL_CONNECTION_TYPE_SERIAL,
@@ -147,26 +147,6 @@ pub const NodeDiscoveries = struct {
         mscl.mscl_node_discoveries_free(self.discoveries.ptr);
     }
 };
-
-/// Opens the base station on `port`. USB base stations use a baud rate of
-/// 3000000. Close it with `mscl.mscl_base_station_close`.
-pub fn openBaseStation(
-    port: [*:0]const u8,
-    baud_rate: u32,
-) Error!*mscl.mscl_base_station {
-    var base_station: ?*mscl.mscl_base_station = null;
-    const status = mscl.mscl_base_station_open(port, baud_rate, &base_station);
-    return switch (status) {
-        mscl.MSCL_OK => base_station.?,
-        mscl.MSCL_ERROR_INVALID_SERIAL_PORT => Error.InvalidSerialPort,
-        else => Error.Failed,
-    };
-}
-
-test openBaseStation {
-    const actual = openBaseStation("/dev/mscl-zig-no-such-port", 3000000);
-    try std.testing.expectError(Error.InvalidSerialPort, actual);
-}
 
 test {
     referenceAll(@This());
