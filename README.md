@@ -25,11 +25,15 @@ Untested options (not recommended to use):
 ### Build libraries
 ```bash
 zig build -Doptimize=<debug|safe|fast|small> \
+    -Dmscl_optimize=<debug|safe|fast|small> \
     -Dshared \
     -Dlink_static_deps \
     -Dwith_ssl \
     -Dwith_websockets \
 ```
+
+#### Optimize Mode Note
+This package builds MSCL and its dependency (boost) with `small` optimize mode by default due to too big size in other mode. This default behavior assumes nothing goes wrong with MSCL upstream. To change it, pass `-Dmscl_optimize` with desired optimize mode.
 
 ### Helper
 ```bash
