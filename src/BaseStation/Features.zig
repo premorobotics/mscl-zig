@@ -142,5 +142,5 @@ fn readTransmitPowers(
         buffer.len,
         &count,
     );
-    return gpa.dupe(root.TransmitPower, buffer[0..count]);
+    return try gpa.dupe(root.TransmitPower, buffer[0..count]);
 }

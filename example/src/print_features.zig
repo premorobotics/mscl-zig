@@ -33,11 +33,7 @@ pub fn main(init: std.process.Init) !void {
     defer base_station.deinit(init.gpa);
 
     try stdout.print("Base station on {s}\n", .{port});
-    const features = base_station.features orelse {
-        try stdout.writeAll("  MSCL does not support its model.\n");
-        try stdout.flush();
-        return;
-    };
+    const features = base_station.features;
     try stdout.print(
         \\  supports:
         \\    buttons: {}

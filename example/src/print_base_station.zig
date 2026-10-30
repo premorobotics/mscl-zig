@@ -46,13 +46,8 @@ pub fn main(init: std.process.Init) !void {
         \\
     , .{ port, base_station.timeout, base_station.retries });
     try printState(stdout, base_station.state);
-    try stdout.writeAll("  features:");
-    if (base_station.features) |features| {
-        try stdout.writeAll("\n");
-        try printFeatures(stdout, features);
-    } else {
-        try stdout.writeAll(" MSCL does not support its model\n");
-    }
+    try stdout.writeAll("  features:\n");
+    try printFeatures(stdout, base_station.features);
     try stdout.writeAll("  config:\n");
     try printConfig(stdout, config);
     try stdout.flush();

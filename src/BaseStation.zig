@@ -7,9 +7,8 @@ pub const Features = @import("BaseStation/Features.zig");
 pub const State = @import("BaseStation/State.zig");
 
 handle: *root.mscl.mscl_base_station,
-/// Contains information on which features are supported by this BaseStation;
-/// null when MSCL does not support its model.
-features: ?Features,
+/// Contains information on which features are supported by this BaseStation.
+features: Features,
 /// Information read from this BaseStation when it is initialized.
 state: State,
 /// The timeout, in milliseconds, to use when waiting for responses from
@@ -129,7 +128,7 @@ pub fn init(
     }
     var result: BaseStation = .{
         .handle = handle.?,
-        .features = null,
+        .features = std.mem.zeroInit(Features, .{}),
         .state = std.mem.zeroInit(State, .{}),
         .timeout = 0,
         .retries = 0,
@@ -138,14 +137,7 @@ pub fn init(
     result.timeout = result.getTimeout();
     result.retries = result.getRetries();
 
-    result.features =
-        Features.init(gpa, result.handle) catch |err| switch (err) {
-            // The BaseStation model is not supported by MSCL.
-            Features.Error.NotSupported => null,
-            else => |e| {
-                return e;
-            },
-        };
+    result.features = try Features.init(gpa, result.handle);
     result.state.model = try result.model();
     result.state.serial = try result.serial(gpa);
     result.state.name = try result.name(gpa);
@@ -161,9 +153,7 @@ pub fn init(
 /// first.
 pub fn deinit(self: BaseStation, gpa: std.mem.Allocator) void {
     self.state.deinit(gpa);
-    if (self.features) |features| {
-        features.deinit(gpa);
-    }
+    self.features.deinit(gpa);
     root.mscl.mscl_base_station_close(self.handle);
 }
 
@@ -633,11 +623,8 @@ pub fn getConfig(
             },
         };
 
-    // Without features, the number of buttons and ports is unknown.
-    const button_count: u8 =
-        if (self.features) |features| features.button_count else 0;
-    const analog_port_count: u8 =
-        if (self.features) |features| features.analog_port_count else 0;
+    const button_count = self.features.button_count;
+    const analog_port_count = self.features.analog_port_count;
 
     const button_long_press =
         try gpa.alloc(Config.NumberedButton, button_count);
