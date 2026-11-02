@@ -24,8 +24,10 @@ retries: u8,
 
 pub const Error = error{
     Connection,
+    Communication,
     NodeCommunication,
     NotSupported,
+    NoData,
     InvalidConfig,
     /// Any other failure; `root.mscl.mscl_last_error()` describes it.
     MsclFailure,
@@ -154,6 +156,30 @@ pub const Model = enum(mscl.mscl_node_model) {
     g_link_200_px8 = mscl.MSCL_NODE_MODEL_G_LINK_200_PX8,
     g_link_200_px40 = mscl.MSCL_NODE_MODEL_G_LINK_200_PX40,
     _,
+};
+
+/// The values that `poll` read, one per channel.
+pub const PollData = struct {
+    values: []mscl.mscl_poll_value,
+
+    pub fn deinit(self: PollData) void {
+        if (self.values.len == 0) {
+            return;
+        }
+        mscl.mscl_poll_values_free(self.values.ptr);
+    }
+};
+
+/// The data points that `getDiagnosticInfo` read.
+pub const DiagnosticInfo = struct {
+    points: []mscl.mscl_data_point,
+
+    pub fn deinit(self: DiagnosticInfo) void {
+        if (self.points.len == 0) {
+            return;
+        }
+        mscl.mscl_data_points_free(self.points.ptr);
+    }
 };
 
 /// The factory calibration stored on the Node for its channels.
@@ -365,6 +391,97 @@ pub fn deinit(self: Node, gpa: std.mem.Allocator) void {
     self.state.deinit(gpa);
     self.features.deinit(gpa);
     mscl.mscl_node_destroy(self.handle);
+}
+
+/// Sets the node's parent Base Station, which will perform all communication
+/// with the node
+pub fn setBaseStation(self: Node, base_station: BaseStation) void {
+    _ = mscl.mscl_node_set_base_station(self.handle, base_station.handle);
+}
+
+/// Checks whether the given BaseStation is the same BaseStation that is
+/// assigned to this Node.
+pub fn hasBaseStation(self: Node, base_station: BaseStation) bool {
+    var has = false;
+    _ = mscl.mscl_node_has_base_station(
+        self.handle,
+        base_station.handle,
+        &has,
+    );
+    return has;
+}
+
+/// Attempts to set the Node to the Idle state. This will stop the node from
+/// sampling or sleeping, and put it into an idle state so that it may be
+/// communicated with (configured, started sampling, etc.). This operation may
+/// take several seconds to complete. The returned SetToIdleStatus object may be
+/// used to determine the current status of the Set to Idle operation.
+pub fn setToIdle(self: Node) Error!root.SetToIdleStatus {
+    var handle: ?*mscl.mscl_set_to_idle_status = null;
+    const status = mscl.mscl_node_set_to_idle(self.handle, &handle);
+    return switch (status) {
+        mscl.MSCL_OK => .{ .handle = handle.? },
+        // Failed to communicate with the parent BaseStation.
+        mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Polls the WirelessNode to get a single sweep of calibrated data.
+pub fn poll(self: Node, channel_mask: root.ChannelMask) Error!PollData {
+    var values: [*c]mscl.mscl_poll_value = null;
+    var count: usize = 0;
+    const status = mscl.mscl_node_poll(
+        self.handle,
+        @bitCast(channel_mask),
+        &values,
+        &count,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => .{
+            .values = if (count == 0) &.{} else values[0..count],
+        },
+        // Autocal shunt is not supported by the Node or ChannelMask.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Performs an immediate request for the Node's Diagnostic Info. Note: Nodes
+/// can also be configured to transmit Diagnostic Info data packets at a
+/// specified Diagnostic Interval via the WirelessNodeConfig object.
+pub fn diagnosticInfo(self: Node) Error!DiagnosticInfo {
+    var points: [*c]mscl.mscl_data_point = null;
+    var count: usize = 0;
+    const status =
+        mscl.mscl_node_get_diagnostic_info(self.handle, &points, &count);
+    return switch (status) {
+        mscl.MSCL_OK => .{
+            .points = if (count == 0) &.{} else points[0..count],
+        },
+        // The Get Diagnostic Info command is not supported.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Wireless Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }
 
 /// Reads the settings that a WirelessNodeConfig can hold from the Node, with
@@ -880,6 +997,44 @@ pub fn getActiveChannels(self: Node) Error!root.ChannelMask {
     };
 }
 
+/// Gets the Timestamp for the last time MSCL communicated with the Node. Note:
+/// EEPROM reads using the cache will not update this timestamp.
+pub fn getLastCommunicationTime(self: Node) Error!u64 {
+    var time_ns: u64 = 0;
+    const status = mscl.mscl_node_get_last_communication_time(
+        self.handle,
+        &time_ns,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => time_ns,
+        // There is no communication time logged for this Node.
+        mscl.MSCL_ERROR_NO_DATA => Error.NoData,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the last known DeviceState for the Node. This device state is updated
+/// by diagnostic packets, as well as when operations are performed by MSCL,
+/// such as setting a Node to idle.
+pub fn getLastDeviceState(self: Node) root.DeviceState {
+    var state: mscl.mscl_device_state = 0;
+    _ = mscl.mscl_node_get_last_device_state(self.handle, &state);
+    return @fromBackingInt(state);
+}
+
+/// Enables or disables the use of group eeprom read when trying to read a
+/// single value (enabled by default). Note:    In most cases, leaving this
+/// enabled will provide better performance, allowing the cache to be built
+/// quicker, requiring less communication to the actual device. However, in some
+/// cases such as with very high traffic, it may be beneficial to restrict reads
+/// to use the single commands, as the packets are smaller over the air.
+pub fn useGroupRead(self: Node, use_group: bool) void {
+    _ = mscl.mscl_node_use_group_read(self.handle, use_group);
+}
+
 /// Sets the number of retry attempts for reading and writing config options
 /// with the Node. By default, the number of retries is 0. Note:   The timeout
 /// that is set per command will be per read and write attempt, meaning this
@@ -888,6 +1043,121 @@ pub fn getActiveChannels(self: Node) Error!root.ChannelMask {
 pub fn setRetries(self: *Node, retries: u8) void {
     _ = mscl.mscl_node_set_retries(self.handle, retries);
     self.retries = self.getRetries();
+}
+
+/// Gets the RadioFeatures of the Node.
+pub fn getRadioFeatures(self: Node) Error!mscl.mscl_radio_features {
+    var radio_features = std.mem.zeroes(mscl.mscl_radio_features);
+    const status = mscl.mscl_node_get_radio_features(
+        self.handle,
+        &radio_features,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => radio_features,
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read the value from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the number of bytes available for data storage on the Node.
+pub fn getDataStorageSize(self: Node) Error!u64 {
+    var size: u64 = 0;
+    const status = mscl.mscl_node_get_data_storage_size(self.handle, &size);
+    return switch (status) {
+        mscl.MSCL_OK => size,
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read the value from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Performs a Long Ping command on the Node to check the communication between
+/// the Base Station and the Node. The response to this command contains the
+/// Node and BaseStation RSSI values.
+pub fn ping(self: Node) Error!mscl.mscl_ping_result {
+    var result = std.mem.zeroes(mscl.mscl_ping_result);
+    const status = mscl.mscl_node_ping(self.handle, &result);
+    return switch (status) {
+        mscl.MSCL_OK => result,
+        // A connection error has occurred with the parent BaseStation
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Puts the Node into a low power, sleep mode. This command attempts to ping
+/// the node before sending the sleep command, to verify communication.
+pub fn sleep(self: Node) Error!bool {
+    var success: bool = false;
+    const status = mscl.mscl_node_sleep(self.handle, &success);
+    return switch (status) {
+        mscl.MSCL_OK => success,
+        // A connection error has occurred with the BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Cycles the power on the Node. Many configuration changes that are applied to
+/// the node do not take effect until the power is cycled.
+pub fn cyclePower(self: Node) Error!void {
+    const status = mscl.mscl_node_cycle_power(self.handle);
+    return switch (status) {
+        mscl.MSCL_OK => {},
+        // Attempted to write an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to reset the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Resets the radio on the Node.
+pub fn resetRadio(self: Node) Error!void {
+    const status = mscl.mscl_node_reset_radio(self.handle);
+    return switch (status) {
+        mscl.MSCL_OK => {},
+        // Attempted to write an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to reset the Node
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }
 
 /// Changes the radio frequency of the Node. Note: If successful, the Node will
@@ -921,6 +1191,310 @@ pub fn changeFrequency(self: *Node, frequency: root.Frequency) Error!void {
         },
     }
     self.frequency = try self.getFrequency();
+}
+
+/// Erases all logged data on the Node. Note: Erasing the data on the Node may
+/// take up to 30 seconds to complete for some devices. This command will return
+/// immediately while the Node is being erased. If you wish to check the status
+/// of the Erase operation, you can continuously ping the Node. A successful
+/// ping means the erase has completed.
+pub fn erase(self: Node) Error!void {
+    const status = mscl.mscl_node_erase(self.handle);
+    return switch (status) {
+        mscl.MSCL_OK => {},
+        // Failed to erase the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Starts the Node in Non-Synchronized Sampling Mode. This will immediately
+/// start the Node sampling, with the current Sampling settings that are applied
+/// to the Node. Note: To start the Node in Synchronized Sampling Mode, use the
+/// SyncSamplingNetwork class.
+pub fn startNonSyncSampling(self: Node) Error!bool {
+    var success: bool = false;
+    const status = mscl.mscl_node_start_non_sync_sampling(
+        self.handle,
+        &success,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => success,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // The Configuration of the Node is not set for Non-Sync Sampling Mode.
+        mscl.MSCL_ERROR_INVALID_CONFIG => Error.InvalidConfig,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Important!: Use the SyncSamplingNetwork to start a Node in Sync Sampling
+/// mode. Advanced Function that sends the Start Sync Sampling command to the
+/// individual Node. This command is useful when you have already used the
+/// SyncSamplingNetwork object to start a network of Nodes, but need to resend
+/// the start command to a Node. For instance, if you had to set a node to idle,
+/// and haven't changed any configuration settings. Note that this command does
+/// not enable a beacon, which is needed for a Sync Sampling network to be
+/// running. Warning: This function is rarely what you want to use to start Sync
+/// Sampling. Instead, you should create a SyncSamplingNetwork object. Failing
+/// to use the SyncSamplingNetwork object can cause the network to be
+/// misconfigured, and result in loss of data.
+pub fn resendStartSyncSampling(self: Node) Error!bool {
+    var success: bool = false;
+    const status = mscl.mscl_node_resend_start_sync_sampling(
+        self.handle,
+        &success,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => success,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        // The Configuration of the Node is not set for Sync Sampling Mode.
+        mscl.MSCL_ERROR_INVALID_CONFIG => Error.InvalidConfig,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Clears the Histogram on the Node.
+pub fn clearHistogram(self: Node) Error!void {
+    const status = mscl.mscl_node_clear_histogram(self.handle);
+    return switch (status) {
+        mscl.MSCL_OK => {},
+        // Histogram configuration is not supported by the Node.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Performs an Auto Balance command on a specified channel on the Node. This
+/// adjusts the sensor offset for differential channels to affect range.
+pub fn autoBalance(
+    self: Node,
+    channel_mask: root.ChannelMask,
+    target_percent: f32,
+) Error!mscl.mscl_auto_balance_result {
+    var result = std.mem.zeroes(mscl.mscl_auto_balance_result);
+    const status = mscl.mscl_node_auto_balance(
+        self.handle,
+        @bitCast(channel_mask),
+        target_percent,
+        &result,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => result,
+        // Auto balance is not supported by the Node or channel mask specified.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Performs automatic calibration for the SHM-Link Wireless Node.
+pub fn autoCalShmLink(self: Node) Error!mscl.mscl_auto_cal_result_shm_link {
+    var result = std.mem.zeroes(mscl.mscl_auto_cal_result_shm_link);
+    const status = mscl.mscl_node_auto_cal_shm_link(self.handle, &result);
+    return switch (status) {
+        mscl.MSCL_OK => result,
+        // Autocal is not supported by the Node or The node is an invalid model
+        // for this command.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Performs automatic calibration for the SHM-Link-201 Wireless Node.
+pub fn autoCalShmLink201(
+    self: Node,
+) Error!mscl.mscl_auto_cal_result_shm_link_201 {
+    var result = std.mem.zeroes(mscl.mscl_auto_cal_result_shm_link_201);
+    const status = mscl.mscl_node_auto_cal_shm_link_201(self.handle, &result);
+    return switch (status) {
+        mscl.MSCL_OK => result,
+        // Autocal is not supported by the Node or The node is an invalid model
+        // for this command.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Performs automatic shunt calibration for a specified ChannelMask on
+/// supported Nodes.
+pub fn autoShuntCal(
+    self: Node,
+    channel_mask: root.ChannelMask,
+    command_info: mscl.mscl_shunt_cal_cmd_info,
+) Error!mscl.mscl_auto_shunt_cal_result {
+    var result = std.mem.zeroes(mscl.mscl_auto_shunt_cal_result);
+    const status = mscl.mscl_node_auto_shunt_cal(
+        self.handle,
+        @bitCast(channel_mask),
+        &command_info,
+        &result,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => result,
+        // Autocal shunt is not supported by the Node or ChannelMask.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Tests if the Node will still be able to communicate after changing the
+/// Node's communication protocol. This is recommended to be used before
+/// changing communication protocol as the range can change between protocol
+/// modes. Note: Both the Node and BaseStation will return to the current
+/// protocol after this test.
+pub fn testCommunicationProtocol(
+    self: Node,
+    protocol: root.CommProtocol,
+) Error!bool {
+    var success: bool = false;
+    const status = mscl.mscl_node_test_communication_protocol(
+        self.handle,
+        @backingInt(protocol),
+        &success,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => success,
+        // The given communication protocol, or the test communication protocol
+        // function, is not supported by the Node or BaseStation.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to communicate with the Wireless Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the number of datalog sessions that are currently stored on the Node.
+pub fn getNumDatalogSessions(self: Node) Error!u16 {
+    var count: u16 = 0;
+    const status = mscl.mscl_node_get_num_datalog_sessions(self.handle, &count);
+    return switch (status) {
+        mscl.MSCL_OK => count,
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the internal datalogging memory percentage that is currently stored on
+/// the Node.
+pub fn getPercentFull(self: Node) Error!f32 {
+    var percent: f32 = 0;
+    const status = mscl.mscl_node_get_percent_full(self.handle, &percent);
+    return switch (status) {
+        mscl.MSCL_OK => percent,
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the ADC WirelessTypes::Voltage Reference of the Node.
+pub fn getAdcVoltageRef(self: Node) Error!root.Voltage {
+    var voltage: mscl.mscl_voltage = 0;
+    const status = mscl.mscl_node_get_adc_voltage_ref(self.handle, &voltage);
+    return switch (status) {
+        mscl.MSCL_OK => @fromBackingInt(voltage),
+        // ADC Voltage is not supported.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Reads the Gain Amplifier WirelessTypes::Voltage Reference of the Node.
+pub fn getGainAmplifierVoltageRef(self: Node) Error!root.Voltage {
+    var voltage: mscl.mscl_voltage = 0;
+    const status = mscl.mscl_node_get_gain_amplifier_voltage_ref(
+        self.handle,
+        &voltage,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => @fromBackingInt(voltage),
+        // ADC Voltage is not supported.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }
 
 /// Reads the Input Range of the specified ChannelMask currently set on the

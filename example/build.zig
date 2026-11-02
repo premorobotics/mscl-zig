@@ -94,4 +94,24 @@ pub fn build(b: *std.Build) void {
         "Print everything about the first attached base station",
     );
     base_station_step.dependOn(&b.addRunArtifact(base_station_exe).step);
+
+    const node_features_exe = b.addExecutable(.{
+        .name = "print_node_features",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/print_node_features.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "mscl_zig", .module = mscl_zig.module("mscl_zig") },
+            },
+        }),
+    });
+    b.installArtifact(node_features_exe);
+    const node_features_run = b.addRunArtifact(node_features_exe);
+    node_features_run.addPassthruArgs();
+    const node_features_step = b.step(
+        "print_node_features",
+        "Print the features of a node: print_node_features -- <node address>",
+    );
+    node_features_step.dependOn(&node_features_run.step);
 }
