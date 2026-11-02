@@ -429,6 +429,137 @@ pub fn applyConfig(
     };
 }
 
+/// Sets which channels are active on the Node. When the sample rate currently
+/// set on the Node is faster than the max the Node supports with `channels`,
+/// the sample rate is lowered to that max in the same apply.
+/// When the options are not valid, nothing is applied, `issues` receives one
+/// line per problem, NUL-terminated and truncated to fit, and InvalidConfig is
+/// returned.
+pub fn setActiveChannels(
+    self: Node,
+    channels: root.ChannelMask,
+    issues: []u8,
+) (Error || Features.Error || std.mem.Allocator.Error)!void {
+    const sampling_mode = try self.getSamplingMode();
+    const collection_method = try self.getDataCollectionMethod();
+    const data_mode = try self.getDataMode();
+    const sample_rate = try self.getSampleRate();
+    const max = try self.features.sample_rate.max(
+        sampling_mode,
+        channels,
+        collection_method,
+        data_mode,
+    );
+    const rate_count = @typeInfo(root.SampleRate).@"enum".field_names.len;
+    var buffer: [rate_count]root.SampleRate = undefined;
+    const rates = try self.features.sample_rate.list(
+        sampling_mode,
+        collection_method,
+        data_mode,
+        &buffer,
+    );
+    // The rates are listed from the fastest, so a rate listed before the max
+    // is faster than the max.
+    const max_index = std.mem.findScalar(root.SampleRate, rates, max);
+    const rate_index = std.mem.findScalar(root.SampleRate, rates, sample_rate);
+
+    var handle: ?*mscl.mscl_node_config = null;
+    const create_status = mscl.mscl_node_config_create(&handle);
+    switch (create_status) {
+        mscl.MSCL_OK => {},
+        // Allocating the config failed.
+        mscl.MSCL_ERROR_OUT_OF_MEMORY => {
+            return std.mem.Allocator.Error.OutOfMemory;
+        },
+        else => unreachable,
+    }
+    const mscl_config = handle.?;
+    defer mscl.mscl_node_config_destroy(mscl_config);
+
+    _ = mscl.mscl_node_config_set_active_channels(
+        mscl_config,
+        @bitCast(channels),
+    );
+    if (max_index != null and rate_index != null and
+        rate_index.? < max_index.?)
+    {
+        _ = mscl.mscl_node_config_set_sample_rate(
+            mscl_config,
+            @backingInt(max),
+        );
+    }
+
+    var ok = false;
+    const verify_status = mscl.mscl_node_verify_config(
+        self.handle,
+        mscl_config,
+        &ok,
+        issues.ptr,
+        issues.len,
+    );
+    switch (verify_status) {
+        mscl.MSCL_OK => {},
+        // The Node model, or firmware version, is not supported by MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => {
+            return Error.NotSupported;
+        },
+        // Failed to communicate with the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => {
+            return Error.NodeCommunication;
+        },
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
+        },
+        else => {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    if (!ok) {
+        // The configuration is invalid; `issues` lists why.
+        return Error.InvalidConfig;
+    }
+
+    const apply_status = mscl.mscl_node_apply_config(self.handle, mscl_config);
+    return switch (apply_status) {
+        mscl.MSCL_OK => {},
+        // The Node model, or firmware version, is not supported by MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Invalid Configuration. Check the exception for specific details.
+        mscl.MSCL_ERROR_INVALID_CONFIG => Error.InvalidConfig,
+        // Failed to write to the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the ChannelMask currently set on the Node, representing which channels
+/// are enabled and disabled.
+pub fn getActiveChannels(self: Node) Error!root.ChannelMask {
+    var mask: u16 = 0;
+    const status = mscl.mscl_node_get_active_channels(self.handle, &mask);
+    return switch (status) {
+        mscl.MSCL_OK => @bitCast(mask),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
 /// Reads the Input Range of the specified ChannelMask currently set on the
 /// Node.
 pub fn getInputRange(
