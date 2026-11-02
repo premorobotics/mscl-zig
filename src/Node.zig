@@ -147,6 +147,63 @@ pub const Model = enum(mscl.mscl_node_model) {
     _,
 };
 
+/// The factory calibration stored on the Node for its channels.
+/// `Features.supports.get_factory_cal` tells whether the Node has any.
+pub const FactoryCalibration = struct {
+    /// Gets the factory-calibrated linear equation for the specified
+    /// ChannelMask.
+    pub fn linearEquation(
+        node: Node,
+        channel_mask: root.ChannelMask,
+    ) Error!mscl.mscl_linear_equation {
+        var equation = std.mem.zeroes(mscl.mscl_linear_equation);
+        const status = mscl.mscl_node_get_factory_calibration_linear_eq(
+            node.handle,
+            @bitCast(channel_mask),
+            &equation,
+        );
+        return switch (status) {
+            mscl.MSCL_OK => equation,
+            // Linear Equation is not supported for the provided ChannelMask.
+            mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+            // Failed to communicate with the Node.
+            mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+            // A connection error has occurred with the parent BaseStation.
+            mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+            else => mscl: {
+                std.log.err("{s}", .{mscl.mscl_last_error()});
+                break :mscl Error.MsclFailure;
+            },
+        };
+    }
+
+    /// Reads the factory calibration unit for the specified ChannelMask.
+    pub fn unit(
+        node: Node,
+        channel_mask: root.ChannelMask,
+    ) Error!root.CalCoefUnit {
+        var res: mscl.mscl_cal_coef_unit = 0;
+        const status = mscl.mscl_node_get_factory_calibration_unit(
+            node.handle,
+            @bitCast(channel_mask),
+            &res,
+        );
+        return switch (status) {
+            mscl.MSCL_OK => @fromBackingInt(res),
+            // Unit is not supported for the provided ChannelMask.
+            mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+            // Failed to communicate with the Node.
+            mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+            // A connection error has occurred with the parent BaseStation.
+            mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+            else => mscl: {
+                std.log.err("{s}", .{mscl.mscl_last_error()});
+                break :mscl Error.MsclFailure;
+            },
+        };
+    }
+};
+
 /// Creates a WirelessNode object with the given node address and parent
 /// BaseStation.
 pub fn init(
