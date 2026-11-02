@@ -15,6 +15,12 @@ state: State,
 /// The frequency that the Node is on. Null when the Node does not support
 /// reading it. `changeFrequency` updates it.
 frequency: ?root.Frequency,
+/// The number of retry attempts for reading and writing config options with
+/// the Node. By default, the number of retries is 0. Note:   The timeout that
+/// is set per command will be per read and write attempt, meaning this retry
+/// number is multiplied by the timeout for your overall timeout.
+/// `setRetries` updates it.
+retries: u8,
 
 pub const Error = error{
     Connection,
@@ -338,6 +344,7 @@ pub fn init(
         .features = features,
         .state = std.mem.zeroInit(State, .{}),
         .frequency = null,
+        .retries = 0,
     };
     errdefer result.state.deinit(gpa);
 
@@ -349,6 +356,7 @@ pub fn init(
     result.state.region_code = try result.getRegionCode();
     result.state.firmware_version = try result.getFirmwareVersion();
     result.frequency = try result.getFrequency();
+    result.retries = result.getRetries();
     return result;
 }
 
@@ -870,6 +878,16 @@ pub fn getActiveChannels(self: Node) Error!root.ChannelMask {
             break :mscl Error.MsclFailure;
         },
     };
+}
+
+/// Sets the number of retry attempts for reading and writing config options
+/// with the Node. By default, the number of retries is 0. Note:   The timeout
+/// that is set per command will be per read and write attempt, meaning this
+/// retry number is multiplied by the timeout for your overall timeout.
+/// Updates `retries`.
+pub fn setRetries(self: *Node, retries: u8) void {
+    _ = mscl.mscl_node_set_retries(self.handle, retries);
+    self.retries = self.getRetries();
 }
 
 /// Changes the radio frequency of the Node. Note: If successful, the Node will
@@ -2043,4 +2061,14 @@ fn getFrequency(self: Node) Error!?root.Frequency {
             break :mscl Error.MsclFailure;
         },
     };
+}
+
+/// Gets the number of retry attempts for reading and writing config options
+/// with the Node. By default, the number of retries is 0. Note:   The timeout
+/// that is set per command will be per read and write attempt, meaning this
+/// retry number is multiplied by the timeout for your overall timeout.
+fn getRetries(self: Node) u8 {
+    var retries: u8 = 0;
+    _ = mscl.mscl_node_get_retries(self.handle, &retries);
+    return retries;
 }
