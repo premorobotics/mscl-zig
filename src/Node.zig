@@ -21,6 +21,9 @@ frequency: ?root.Frequency,
 /// number is multiplied by the timeout for your overall timeout.
 /// `setRetries` updates it.
 retries: u8,
+/// The ChannelMask currently set on the Node, representing which channels are
+/// enabled and disabled. `setActiveChannels` updates it.
+active_channels: root.ChannelMask,
 
 pub const Error = error{
     Connection,
@@ -371,6 +374,7 @@ pub fn init(
         .state = std.mem.zeroInit(State, .{}),
         .frequency = null,
         .retries = 0,
+        .active_channels = .{},
     };
     errdefer result.state.deinit(gpa);
 
@@ -383,6 +387,7 @@ pub fn init(
     result.state.firmware_version = try result.getFirmwareVersion();
     result.frequency = try result.getFrequency();
     result.retries = result.getRetries();
+    result.active_channels = try result.getActiveChannels();
     return result;
 }
 
@@ -872,8 +877,9 @@ pub fn applyConfig(
 /// When the options are not valid, nothing is applied, `issues` receives one
 /// line per problem, NUL-terminated and truncated to fit, and InvalidConfig is
 /// returned.
+/// Updates `active_channels`.
 pub fn setActiveChannels(
-    self: Node,
+    self: *Node,
     channels: root.ChannelMask,
     issues: []u8,
 ) (Error || Features.Error || std.mem.Allocator.Error)!void {
@@ -959,42 +965,30 @@ pub fn setActiveChannels(
     }
 
     const apply_status = mscl.mscl_node_apply_config(self.handle, mscl_config);
-    return switch (apply_status) {
+    switch (apply_status) {
         mscl.MSCL_OK => {},
         // The Node model, or firmware version, is not supported by MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        mscl.MSCL_ERROR_NOT_SUPPORTED => {
+            return Error.NotSupported;
+        },
         // Invalid Configuration. Check the exception for specific details.
-        mscl.MSCL_ERROR_INVALID_CONFIG => Error.InvalidConfig,
+        mscl.MSCL_ERROR_INVALID_CONFIG => {
+            return Error.InvalidConfig;
+        },
         // Failed to write to the Node.
-        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
-        // A connection error has occurred with the parent BaseStation.
-        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => mscl: {
-            std.log.err("{s}", .{mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => {
+            return Error.NodeCommunication;
         },
-    };
-}
-
-/// Gets the ChannelMask currently set on the Node, representing which channels
-/// are enabled and disabled.
-pub fn getActiveChannels(self: Node) Error!root.ChannelMask {
-    var mask: u16 = 0;
-    const status = mscl.mscl_node_get_active_channels(self.handle, &mask);
-    return switch (status) {
-        mscl.MSCL_OK => @bitCast(mask),
-        // Attempted to read an unsupported option. The device firmware is not
-        // compatible with this version of MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
-        // Failed to read from the Node.
-        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
-        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => mscl: {
-            std.log.err("{s}", .{mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
+        mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
         },
-    };
+        else => {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    self.active_channels = try self.getActiveChannels();
 }
 
 /// Gets the Timestamp for the last time MSCL communicated with the Node. Note:
@@ -2645,4 +2639,25 @@ fn getRetries(self: Node) u8 {
     var retries: u8 = 0;
     _ = mscl.mscl_node_get_retries(self.handle, &retries);
     return retries;
+}
+
+/// Gets the ChannelMask currently set on the Node, representing which channels
+/// are enabled and disabled.
+fn getActiveChannels(self: Node) Error!root.ChannelMask {
+    var mask: u16 = 0;
+    const status = mscl.mscl_node_get_active_channels(self.handle, &mask);
+    return switch (status) {
+        mscl.MSCL_OK => @bitCast(mask),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }
