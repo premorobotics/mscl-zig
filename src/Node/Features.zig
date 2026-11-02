@@ -324,7 +324,7 @@ pub const Sweeps = struct {
         sampling_mode: root.SamplingMode,
         data_mode: root.DataMode,
         data_format: root.DataFormat,
-        channels: u16,
+        channels: root.ChannelMask,
     ) u32 {
         const features: *const Features =
             @alignCast(@fieldParentPtr("sweeps", self));
@@ -334,7 +334,7 @@ pub const Sweeps = struct {
             @backingInt(sampling_mode),
             @backingInt(data_mode),
             @backingInt(data_format),
-            channels,
+            @bitCast(channels),
             &sweeps,
         );
         return sweeps;
@@ -401,7 +401,7 @@ pub const TimeBetweenBursts = struct {
         self: *const TimeBetweenBursts,
         data_mode: root.DataMode,
         data_format: root.DataFormat,
-        raw_channels: u16,
+        raw_channels: root.ChannelMask,
         derived_masks: []const mscl.mscl_derived_channel_mask,
         raw_sample_rate: root.SampleRate,
         sweeps_per_burst: u32,
@@ -414,7 +414,7 @@ pub const TimeBetweenBursts = struct {
             features.handle,
             @backingInt(data_mode),
             @backingInt(data_format),
-            raw_channels,
+            @bitCast(raw_channels),
             derived_masks.ptr,
             derived_masks.len,
             @backingInt(raw_sample_rate),
@@ -453,7 +453,7 @@ pub const EventDuration = struct {
         self: *const EventDuration,
         data_mode: root.DataMode,
         data_format: root.DataFormat,
-        raw_channels: u16,
+        raw_channels: root.ChannelMask,
         derived_masks: []const mscl.mscl_derived_channel_mask,
         raw_sample_rate: root.SampleRate,
         derived_data_rate: root.SampleRate,
@@ -465,7 +465,7 @@ pub const EventDuration = struct {
             features.handle,
             @backingInt(data_mode),
             @backingInt(data_format),
-            raw_channels,
+            @bitCast(raw_channels),
             derived_masks.ptr,
             derived_masks.len,
             @backingInt(raw_sample_rate),
@@ -557,7 +557,7 @@ pub const SampleRates = struct {
     pub fn max(
         self: *const SampleRates,
         sampling_mode: root.SamplingMode,
-        channels: u16,
+        channels: root.ChannelMask,
         collection_method: root.DataCollectionMethod,
         data_mode: root.DataMode,
     ) Error!root.SampleRate {
@@ -567,7 +567,7 @@ pub const SampleRates = struct {
         const status = mscl.mscl_node_features_get_max_sample_rate(
             features.handle,
             @backingInt(sampling_mode),
-            channels,
+            @bitCast(channels),
             @backingInt(collection_method),
             @backingInt(data_mode),
             &rate,
@@ -625,7 +625,7 @@ pub const SampleRates = struct {
         sampling_mode: root.SamplingMode,
         collection_method: root.DataCollectionMethod,
         data_mode: root.DataMode,
-        channels: u16,
+        channels: root.ChannelMask,
     ) Error!root.SampleRate {
         const features: *const Features =
             @alignCast(@fieldParentPtr("sample_rate", self));
@@ -637,7 +637,7 @@ pub const SampleRates = struct {
                 @backingInt(sampling_mode),
                 @backingInt(collection_method),
                 @backingInt(data_mode),
-                channels,
+                @bitCast(channels),
                 &rate,
             );
         return switch (status) {
@@ -662,7 +662,7 @@ pub const InputRanges = struct {
     /// fit.
     pub fn list(
         self: *const InputRanges,
-        channels: u16,
+        channels: root.ChannelMask,
         buffer: []mscl.mscl_input_range_entry,
         option: struct {
             /// The Excitation WirelessTypes::Voltage to get the input ranges
@@ -676,7 +676,7 @@ pub const InputRanges = struct {
         if (option.excitation_voltage) |voltage| {
             _ = mscl.mscl_node_features_get_input_ranges_for_excitation_voltage(
                 features.handle,
-                channels,
+                @bitCast(channels),
                 @backingInt(voltage),
                 buffer.ptr,
                 buffer.len,
@@ -685,7 +685,7 @@ pub const InputRanges = struct {
         } else {
             _ = mscl.mscl_node_features_get_input_ranges(
                 features.handle,
-                channels,
+                @bitCast(channels),
                 buffer.ptr,
                 buffer.len,
                 &count,
