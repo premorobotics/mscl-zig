@@ -42,9 +42,29 @@ pub fn main(init: std.process.Init) !void {
         \\Base station on {s}
         \\  timeout: {d} ms
         \\  retries: {d}
-        \\  state:
+        \\  frequency: {?t}
         \\
-    , .{ port, base_station.timeout, base_station.retries });
+    , .{
+        port,
+        base_station.timeout,
+        base_station.retries,
+        base_station.frequency,
+    });
+    if (base_station.getBeaconStatus()) |beacon| {
+        try stdout.print("  beacon: enabled: {}, timestamp: {d} ns\n", .{
+            beacon.enabled,
+            beacon.timestamp_ns,
+        });
+    } else |err| switch (err) {
+        mscl_zig.BaseStation.Error.NotSupported => {
+            try stdout.writeAll("  beacon: null\n");
+        },
+        else => |e| {
+            std.log.err("{t}: {s}", .{ e, mscl_zig.mscl.mscl_last_error() });
+            return e;
+        },
+    }
+    try stdout.writeAll("  state:\n");
     try printState(stdout, base_station.state);
     try stdout.writeAll("  features:\n");
     try printFeatures(stdout, base_station.features);
@@ -71,17 +91,8 @@ fn printState(
     try stdout.print(
         \\    microcontroller: {?t}
         \\    region code: {?t}
-        \\    frequency: {?t}
         \\
-    , .{ state.microcontroller, state.region_code, state.frequency });
-    if (state.beacon_status) |beacon| {
-        try stdout.print("    beacon: enabled: {}, timestamp: {d} ns\n", .{
-            beacon.enabled,
-            beacon.timestamp_ns,
-        });
-    } else {
-        try stdout.writeAll("    beacon: null\n");
-    }
+    , .{ state.microcontroller, state.region_code });
 }
 
 fn printFeatures(

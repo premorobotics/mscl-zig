@@ -55,15 +55,6 @@ fn printState(
     try stdout.print(
         \\  microcontroller: {?t}
         \\  region code: {?t}
-        \\  frequency: {?t}
         \\
-    , .{ state.microcontroller, state.region_code, state.frequency });
-    if (state.beacon_status) |beacon| {
-        try stdout.print("  beacon: enabled: {}, timestamp: {d} ns\n", .{
-            beacon.enabled,
-            beacon.timestamp_ns,
-        });
-    } else {
-        try stdout.writeAll("  beacon: null\n");
-    }
+    , .{ state.microcontroller, state.region_code });
 }
