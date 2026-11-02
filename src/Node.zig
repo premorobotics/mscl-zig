@@ -6,9 +6,12 @@ const BaseStation = @import("BaseStation.zig");
 const Node = @This();
 pub const Config = @import("Node/Config.zig");
 pub const Features = @import("Node/Features.zig");
+pub const State = @import("Node/State.zig");
 
 handle: *mscl.mscl_node,
 features: Features,
+/// Information read from this Node when it is initialized.
+state: State,
 
 pub const Error = error{
     Connection,
@@ -17,6 +20,131 @@ pub const Error = error{
     InvalidConfig,
     /// Any other failure; `root.mscl.mscl_last_error()` describes it.
     MsclFailure,
+};
+
+/// The model numbers for each of the Wireless Nodes.
+pub const Model = enum(mscl.mscl_node_model) {
+    v_link_legacy = mscl.MSCL_NODE_MODEL_V_LINK_LEGACY,
+    cf_bearing_temp_link = mscl.MSCL_NODE_MODEL_CF_BEARING_TEMP_LINK,
+    env_link_pro = mscl.MSCL_NODE_MODEL_ENV_LINK_PRO,
+    g_link_2g = mscl.MSCL_NODE_MODEL_G_LINK_2G,
+    g_link_10g = mscl.MSCL_NODE_MODEL_G_LINK_10G,
+    g_link_ii_cust_in = mscl.MSCL_NODE_MODEL_G_LINK_II_CUST_IN,
+    g_link_ii_2g_in = mscl.MSCL_NODE_MODEL_G_LINK_II_2G_IN,
+    g_link_ii_10g_in = mscl.MSCL_NODE_MODEL_G_LINK_II_10G_IN,
+    g_link_ii_cust_ex = mscl.MSCL_NODE_MODEL_G_LINK_II_CUST_EX,
+    g_link_ii_2g_ex = mscl.MSCL_NODE_MODEL_G_LINK_II_2G_EX,
+    g_link_ii_10g_ex = mscl.MSCL_NODE_MODEL_G_LINK_II_10G_EX,
+    g_link_rgd_10g = mscl.MSCL_NODE_MODEL_G_LINK_RGD_10G,
+    g_link_200_8g = mscl.MSCL_NODE_MODEL_G_LINK_200_8G,
+    g_link_200_40g = mscl.MSCL_NODE_MODEL_G_LINK_200_40G,
+    g_link_200_8g_oem = mscl.MSCL_NODE_MODEL_G_LINK_200_8G_OEM,
+    g_link_200_40g_oem = mscl.MSCL_NODE_MODEL_G_LINK_200_40G_OEM,
+    g_link_200_8g_oem_mmcx = mscl.MSCL_NODE_MODEL_G_LINK_200_8G_OEM_MMCX,
+    g_link_200_40g_oem_mmcx = mscl.MSCL_NODE_MODEL_G_LINK_200_40G_OEM_MMCX,
+    g_link_200_8g_oem_u_fl = mscl.MSCL_NODE_MODEL_G_LINK_200_8G_OEM_U_FL,
+    g_link_200_40g_oem_u_fl = mscl.MSCL_NODE_MODEL_G_LINK_200_40G_OEM_U_FL,
+    g_link_200_r = mscl.MSCL_NODE_MODEL_G_LINK_200_R,
+    sg_link_oem_s = mscl.MSCL_NODE_MODEL_SG_LINK_OEM_S,
+    sg_link = mscl.MSCL_NODE_MODEL_SG_LINK,
+    sg_link200 = mscl.MSCL_NODE_MODEL_SG_LINK200,
+    sg_link200_hbridge_1k = mscl.MSCL_NODE_MODEL_SG_LINK200_HBRIDGE_1K,
+    sg_link200_hbridge_350 = mscl.MSCL_NODE_MODEL_SG_LINK200_HBRIDGE_350,
+    sg_link200_hbridge_120 = mscl.MSCL_NODE_MODEL_SG_LINK200_HBRIDGE_120,
+    sg_link200_qbridge_1k = mscl.MSCL_NODE_MODEL_SG_LINK200_QBRIDGE_1K,
+    sg_link200_qbridge_350 = mscl.MSCL_NODE_MODEL_SG_LINK200_QBRIDGE_350,
+    sg_link200_qbridge_120 = mscl.MSCL_NODE_MODEL_SG_LINK200_QBRIDGE_120,
+    sg_link_oem = mscl.MSCL_NODE_MODEL_SG_LINK_OEM,
+    sg_link_micro = mscl.MSCL_NODE_MODEL_SG_LINK_MICRO,
+    sg_link200_oem = mscl.MSCL_NODE_MODEL_SG_LINK200_OEM,
+    sg_link200_oem_ufl = mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_UFL,
+    sg_link200_oem_hbridge_1k = mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_HBRIDGE_1K,
+    sg_link200_oem_hbridge_1k_ufl =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_HBRIDGE_1K_UFL,
+    sg_link200_oem_hbridge_120 =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_HBRIDGE_120,
+    sg_link200_oem_hbridge_120_ufl =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_HBRIDGE_120_UFL,
+    sg_link200_oem_hbridge_350 =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_HBRIDGE_350,
+    sg_link200_oem_hbridge_350_ufl =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_HBRIDGE_350_UFL,
+    sg_link200_oem_qbridge_1k = mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_1K,
+    sg_link200_oem_qbridge_1k_ufl =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_1K_UFL,
+    sg_link200_oem_qbridge_120 =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_120,
+    sg_link200_oem_qbridge_120_ufl =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_120_UFL,
+    sg_link200_oem_qbridge_350 =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_350,
+    sg_link200_oem_qbridge_350_ufl =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_350_UFL,
+    sg_link200_oem_128hz = mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_128HZ,
+    sg_link200_oem_256hz = mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_256HZ,
+    sg_link200_oem_qbridge_350_128hz =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_350_128HZ,
+    sg_link200_oem_qbridge_350_256hz =
+        mscl.MSCL_NODE_MODEL_SG_LINK200_OEM_QBRIDGE_350_256HZ,
+    sg_link_rgd = mscl.MSCL_NODE_MODEL_SG_LINK_RGD,
+    shm_link = mscl.MSCL_NODE_MODEL_SHM_LINK,
+    tc_link_1ch = mscl.MSCL_NODE_MODEL_TC_LINK_1CH,
+    tc_link_6ch = mscl.MSCL_NODE_MODEL_TC_LINK_6CH,
+    tc_link_3ch = mscl.MSCL_NODE_MODEL_TC_LINK_3CH,
+    tc_link_6ch_ip67 = mscl.MSCL_NODE_MODEL_TC_LINK_6CH_IP67,
+    tc_link200_oem = mscl.MSCL_NODE_MODEL_TC_LINK200_OEM,
+    tc_link200_oem_ufl = mscl.MSCL_NODE_MODEL_TC_LINK200_OEM_UFL,
+    tc_link200 = mscl.MSCL_NODE_MODEL_TC_LINK200,
+    rtd_link200 = mscl.MSCL_NODE_MODEL_RTD_LINK200,
+    tc_link_6ch_ip67_rht = mscl.MSCL_NODE_MODEL_TC_LINK_6CH_IP67_RHT,
+    v_link = mscl.MSCL_NODE_MODEL_V_LINK,
+    v_link200 = mscl.MSCL_NODE_MODEL_V_LINK200,
+    v_link200_qbridge_1k = mscl.MSCL_NODE_MODEL_V_LINK200_QBRIDGE_1K,
+    v_link200_qbridge_120 = mscl.MSCL_NODE_MODEL_V_LINK200_QBRIDGE_120,
+    v_link200_qbridge_350 = mscl.MSCL_NODE_MODEL_V_LINK200_QBRIDGE_350,
+    v_link200_hbridge_1k = mscl.MSCL_NODE_MODEL_V_LINK200_HBRIDGE_1K,
+    v_link200_hbridge_120 = mscl.MSCL_NODE_MODEL_V_LINK200_HBRIDGE_120,
+    v_link200_hbridge_350 = mscl.MSCL_NODE_MODEL_V_LINK200_HBRIDGE_350,
+    iepe_link = mscl.MSCL_NODE_MODEL_IEPE_LINK,
+    dvrt_link = mscl.MSCL_NODE_MODEL_DVRT_LINK,
+    env_link_mini = mscl.MSCL_NODE_MODEL_ENV_LINK_MINI,
+    watt_link = mscl.MSCL_NODE_MODEL_WATT_LINK,
+    watt_link_3y208 = mscl.MSCL_NODE_MODEL_WATT_LINK_3Y208,
+    watt_link_3d240 = mscl.MSCL_NODE_MODEL_WATT_LINK_3D240,
+    watt_link_3y400 = mscl.MSCL_NODE_MODEL_WATT_LINK_3Y400,
+    watt_link_3d400 = mscl.MSCL_NODE_MODEL_WATT_LINK_3D400,
+    watt_link_3y480 = mscl.MSCL_NODE_MODEL_WATT_LINK_3Y480,
+    watt_link_3d480 = mscl.MSCL_NODE_MODEL_WATT_LINK_3D480,
+    watt_link_3y600 = mscl.MSCL_NODE_MODEL_WATT_LINK_3Y600,
+    pt_link200 = mscl.MSCL_NODE_MODEL_PT_LINK200,
+    rtd_link = mscl.MSCL_NODE_MODEL_RTD_LINK,
+    shm_link2_cust1_old_number =
+        mscl.MSCL_NODE_MODEL_SHM_LINK2_CUST1_OLD_NUMBER,
+    shm_link2_cust1 = mscl.MSCL_NODE_MODEL_SHM_LINK2_CUST1,
+    shm_link200 = mscl.MSCL_NODE_MODEL_SHM_LINK200,
+    shm_link201 = mscl.MSCL_NODE_MODEL_SHM_LINK201,
+    shm_link201_qbridge_1k = mscl.MSCL_NODE_MODEL_SHM_LINK201_QBRIDGE_1K,
+    shm_link201_qbridge_348 = mscl.MSCL_NODE_MODEL_SHM_LINK201_QBRIDGE_348,
+    shm_link201_hbridge_1k = mscl.MSCL_NODE_MODEL_SHM_LINK201_HBRIDGE_1K,
+    shm_link201_hbridge_348 = mscl.MSCL_NODE_MODEL_SHM_LINK201_HBRIDGE_348,
+    shm_link201_fullbridge = mscl.MSCL_NODE_MODEL_SHM_LINK201_FULLBRIDGE,
+    shm_link210_fullbridge = mscl.MSCL_NODE_MODEL_SHM_LINK210_FULLBRIDGE,
+    shm_link210_qbridge_3k = mscl.MSCL_NODE_MODEL_SHM_LINK210_QBRIDGE_3K,
+    torque_link = mscl.MSCL_NODE_MODEL_TORQUE_LINK,
+    torque_link200_3ch = mscl.MSCL_NODE_MODEL_TORQUE_LINK200_3CH,
+    torque_link200 = mscl.MSCL_NODE_MODEL_TORQUE_LINK200,
+    torque_link200_3ch_s = mscl.MSCL_NODE_MODEL_TORQUE_LINK200_3CH_S,
+    sg_link_herm = mscl.MSCL_NODE_MODEL_SG_LINK_HERM,
+    sg_link_herm_2600 = mscl.MSCL_NODE_MODEL_SG_LINK_HERM_2600,
+    sg_link_herm_2700 = mscl.MSCL_NODE_MODEL_SG_LINK_HERM_2700,
+    sg_link_herm_2800 = mscl.MSCL_NODE_MODEL_SG_LINK_HERM_2800,
+    sg_link_herm_2900 = mscl.MSCL_NODE_MODEL_SG_LINK_HERM_2900,
+    wireless_impact_sensor = mscl.MSCL_NODE_MODEL_WIRELESS_IMPACT_SENSOR,
+    g_link_200_40g_s = mscl.MSCL_NODE_MODEL_G_LINK_200_40G_S,
+    g_link_200_p = mscl.MSCL_NODE_MODEL_G_LINK_200_P,
+    g_link_200_px8 = mscl.MSCL_NODE_MODEL_G_LINK_200_PX8,
+    g_link_200_px40 = mscl.MSCL_NODE_MODEL_G_LINK_200_PX40,
+    _,
 };
 
 /// Creates a WirelessNode object with the given node address and parent
@@ -38,11 +166,28 @@ pub fn init(
     }
     const node = handle.?;
     errdefer mscl.mscl_node_destroy(node);
-    return .{ .handle = node, .features = try Features.init(gpa, node) };
+    const features = try Features.init(gpa, node);
+    errdefer features.deinit(gpa);
+    var result: Node = .{
+        .handle = node,
+        .features = features,
+        .state = std.mem.zeroInit(State, .{}),
+    };
+    errdefer result.state.deinit(gpa);
+
+    result.state.node_address = result.getNodeAddress();
+    result.state.name = try result.getName(gpa);
+    result.state.serial = try result.getSerial(gpa);
+    result.state.model = try result.getModel();
+    result.state.microcontroller = try result.getMicrocontroller();
+    result.state.region_code = try result.getRegionCode();
+    result.state.firmware_version = try result.getFirmwareVersion();
+    return result;
 }
 
 /// Destroys the node. Deinitialize everything using this node first.
 pub fn deinit(self: Node, gpa: std.mem.Allocator) void {
+    self.state.deinit(gpa);
     self.features.deinit(gpa);
     mscl.mscl_node_destroy(self.handle);
 }
@@ -1533,6 +1678,143 @@ fn getSensorOutputMode(self: Node) Error!root.SensorOutputMode {
         // Attempted to read an unsupported option.
         mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the node address of the Node.
+fn getNodeAddress(self: Node) u32 {
+    var address: u32 = 0;
+    _ = mscl.mscl_node_get_node_address(self.handle, &address);
+    return address;
+}
+
+/// Gets the name of the Node. This is the universal sensor name that should be
+/// used for uploading to SensorCloud. This is the same as calling
+/// WirelessNode::deviceName.
+fn getName(
+    self: Node,
+    gpa: std.mem.Allocator,
+) std.mem.Allocator.Error![]const u8 {
+    // MSCL's name is the node address, at most 10 characters, so it always
+    // fits.
+    var buffer: [32]u8 = undefined;
+    _ = mscl.mscl_node_get_name(self.handle, &buffer, buffer.len);
+    return try gpa.dupe(u8, std.mem.sliceTo(&buffer, 0));
+}
+
+/// Gets the serial number of the Node.
+fn getSerial(
+    self: Node,
+    gpa: std.mem.Allocator,
+) (Error || std.mem.Allocator.Error)!?[]const u8 {
+    // MSCL's serial is "model-class-number", at most 5 + 1 + 4 + 1 + 10
+    // characters, so it always fits.
+    var buffer: [32]u8 = undefined;
+    const status =
+        mscl.mscl_node_get_serial(self.handle, &buffer, buffer.len);
+    return switch (status) {
+        mscl.MSCL_OK => try gpa.dupe(u8, std.mem.sliceTo(&buffer, 0)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the model of the Node.
+fn getModel(self: Node) Error!?Model {
+    var model: mscl.mscl_node_model = 0;
+    const status = mscl.mscl_node_get_model(self.handle, &model);
+    return switch (status) {
+        mscl.MSCL_OK => @as(Model, @fromBackingInt(model)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the microcontroller of the Node.
+fn getMicrocontroller(self: Node) Error!?root.Microcontroller {
+    var microcontroller: mscl.mscl_microcontroller = 0;
+    const status = mscl.mscl_node_get_microcontroller(
+        self.handle,
+        &microcontroller,
+    );
+    return switch (status) {
+        mscl.MSCL_OK => @as(
+            root.Microcontroller,
+            @fromBackingInt(microcontroller),
+        ),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the region code currently set on the Node.
+fn getRegionCode(self: Node) Error!?root.RegionCode {
+    var region_code: mscl.mscl_region_code = 0;
+    const status = mscl.mscl_node_get_region_code(self.handle, &region_code);
+    return switch (status) {
+        mscl.MSCL_OK => @as(root.RegionCode, @fromBackingInt(region_code)),
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the firmware version of the Node.
+fn getFirmwareVersion(self: Node) Error!?std.SemanticVersion {
+    var version = std.mem.zeroes(mscl.mscl_version);
+    const status = mscl.mscl_node_get_firmware_version(self.handle, &version);
+    return switch (status) {
+        mscl.MSCL_OK => .{
+            .major = version.major,
+            .minor = version.minor,
+            .patch = version.patch,
+        },
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the Node.
         mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
         mscl.MSCL_ERROR_CONNECTION => Error.Connection,
