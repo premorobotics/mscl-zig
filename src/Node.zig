@@ -12,6 +12,9 @@ handle: *mscl.mscl_node,
 features: Features,
 /// Information read from this Node when it is initialized.
 state: State,
+/// The frequency that the Node is on. Null when the Node does not support
+/// reading it. `changeFrequency` updates it.
+frequency: ?root.Frequency,
 
 pub const Error = error{
     Connection,
@@ -334,6 +337,7 @@ pub fn init(
         .handle = node,
         .features = features,
         .state = std.mem.zeroInit(State, .{}),
+        .frequency = null,
     };
     errdefer result.state.deinit(gpa);
 
@@ -344,6 +348,7 @@ pub fn init(
     result.state.microcontroller = try result.getMicrocontroller();
     result.state.region_code = try result.getRegionCode();
     result.state.firmware_version = try result.getFirmwareVersion();
+    result.frequency = try result.getFrequency();
     return result;
 }
 
@@ -865,6 +870,39 @@ pub fn getActiveChannels(self: Node) Error!root.ChannelMask {
             break :mscl Error.MsclFailure;
         },
     };
+}
+
+/// Changes the radio frequency of the Node. Note: If successful, the Node will
+/// be put onto a different frequency than its parent base station. It is up to
+/// the user of MSCL to switch the base station to this frequency if you wish to
+/// communicate with it.
+/// Updates `frequency`.
+pub fn changeFrequency(self: *Node, frequency: root.Frequency) Error!void {
+    const status = mscl.mscl_node_change_frequency(
+        self.handle,
+        @backingInt(frequency),
+    );
+    switch (status) {
+        mscl.MSCL_OK => {},
+        // Attempted to write an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => {
+            return Error.NotSupported;
+        },
+        // Failed to write the value to the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => {
+            return Error.NodeCommunication;
+        },
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => {
+            return Error.Connection;
+        },
+        else => {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    self.frequency = try self.getFrequency();
 }
 
 /// Reads the Input Range of the specified ChannelMask currently set on the
@@ -1973,6 +2011,26 @@ fn getFirmwareVersion(self: Node) Error!?std.SemanticVersion {
             .minor = version.minor,
             .patch = version.patch,
         },
+        // Attempted to read an unsupported option. The device firmware is not
+        // compatible with this version of MSCL.
+        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        // Failed to read the value from the Node.
+        mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+        // A connection error has occurred with the parent BaseStation.
+        mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
+/// Gets the frequency that the Node is on.
+fn getFrequency(self: Node) Error!?root.Frequency {
+    var frequency: mscl.mscl_frequency = 0;
+    const status = mscl.mscl_node_get_frequency(self.handle, &frequency);
+    return switch (status) {
+        mscl.MSCL_OK => @as(root.Frequency, @fromBackingInt(frequency)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
         mscl.MSCL_ERROR_NOT_SUPPORTED => null,
