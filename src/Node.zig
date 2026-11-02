@@ -12,9 +12,8 @@ handle: *mscl.mscl_node,
 features: Features,
 /// Information read from this Node when it is initialized.
 state: State,
-/// The frequency that the Node is on. Null when the Node does not support
-/// reading it. `changeFrequency` updates it.
-frequency: ?root.Frequency,
+/// The frequency that the Node is on. `changeFrequency` updates it.
+frequency: root.Frequency,
 /// The number of retry attempts for reading and writing config options with
 /// the Node. By default, the number of retries is 0. Note:   The timeout that
 /// is set per command will be per read and write attempt, meaning this retry
@@ -372,7 +371,7 @@ pub fn init(
         .handle = node,
         .features = features,
         .state = std.mem.zeroInit(State, .{}),
-        .frequency = null,
+        .frequency = .unknown,
         .retries = 0,
         .active_channels = .{},
     };
@@ -2499,7 +2498,7 @@ fn getName(
 fn getSerial(
     self: Node,
     gpa: std.mem.Allocator,
-) (Error || std.mem.Allocator.Error)!?[]const u8 {
+) (Error || std.mem.Allocator.Error)![]const u8 {
     // MSCL's serial is "model-class-number", at most 5 + 1 + 4 + 1 + 10
     // characters, so it always fits.
     var buffer: [32]u8 = undefined;
@@ -2509,7 +2508,7 @@ fn getSerial(
         mscl.MSCL_OK => try gpa.dupe(u8, std.mem.sliceTo(&buffer, 0)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the Node.
         mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
@@ -2522,14 +2521,14 @@ fn getSerial(
 }
 
 /// Gets the model of the Node.
-fn getModel(self: Node) Error!?Model {
+fn getModel(self: Node) Error!Model {
     var model: mscl.mscl_node_model = 0;
     const status = mscl.mscl_node_get_model(self.handle, &model);
     return switch (status) {
-        mscl.MSCL_OK => @as(Model, @fromBackingInt(model)),
+        mscl.MSCL_OK => @fromBackingInt(model),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the Node.
         mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
@@ -2542,20 +2541,17 @@ fn getModel(self: Node) Error!?Model {
 }
 
 /// Gets the microcontroller of the Node.
-fn getMicrocontroller(self: Node) Error!?root.Microcontroller {
+fn getMicrocontroller(self: Node) Error!root.Microcontroller {
     var microcontroller: mscl.mscl_microcontroller = 0;
     const status = mscl.mscl_node_get_microcontroller(
         self.handle,
         &microcontroller,
     );
     return switch (status) {
-        mscl.MSCL_OK => @as(
-            root.Microcontroller,
-            @fromBackingInt(microcontroller),
-        ),
+        mscl.MSCL_OK => @fromBackingInt(microcontroller),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the Node.
         mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
@@ -2568,14 +2564,14 @@ fn getMicrocontroller(self: Node) Error!?root.Microcontroller {
 }
 
 /// Gets the region code currently set on the Node.
-fn getRegionCode(self: Node) Error!?root.RegionCode {
+fn getRegionCode(self: Node) Error!root.RegionCode {
     var region_code: mscl.mscl_region_code = 0;
     const status = mscl.mscl_node_get_region_code(self.handle, &region_code);
     return switch (status) {
-        mscl.MSCL_OK => @as(root.RegionCode, @fromBackingInt(region_code)),
+        mscl.MSCL_OK => @fromBackingInt(region_code),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read from the Node.
         mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
@@ -2588,7 +2584,7 @@ fn getRegionCode(self: Node) Error!?root.RegionCode {
 }
 
 /// Gets the firmware version of the Node.
-fn getFirmwareVersion(self: Node) Error!?std.SemanticVersion {
+fn getFirmwareVersion(self: Node) Error!std.SemanticVersion {
     var version = std.mem.zeroes(mscl.mscl_version);
     const status = mscl.mscl_node_get_firmware_version(self.handle, &version);
     return switch (status) {
@@ -2599,7 +2595,7 @@ fn getFirmwareVersion(self: Node) Error!?std.SemanticVersion {
         },
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the Node.
         mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
@@ -2612,14 +2608,14 @@ fn getFirmwareVersion(self: Node) Error!?std.SemanticVersion {
 }
 
 /// Gets the frequency that the Node is on.
-fn getFrequency(self: Node) Error!?root.Frequency {
+fn getFrequency(self: Node) Error!root.Frequency {
     var frequency: mscl.mscl_frequency = 0;
     const status = mscl.mscl_node_get_frequency(self.handle, &frequency);
     return switch (status) {
-        mscl.MSCL_OK => @as(root.Frequency, @fromBackingInt(frequency)),
+        mscl.MSCL_OK => @fromBackingInt(frequency),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the Node.
         mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.

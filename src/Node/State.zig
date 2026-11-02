@@ -1,5 +1,4 @@
-//! Information read from the Node when it is initialized. A value that the
-//! Node does not support is null.
+//! Information read from the Node when it is initialized.
 
 const std = @import("std");
 const root = @import("../root.zig");
@@ -13,19 +12,17 @@ node_address: u32,
 /// for uploading to SensorCloud.
 name: []const u8,
 /// The serial number of the Node.
-serial: ?[]const u8,
+serial: []const u8,
 /// The model of the Node.
-model: ?Node.Model,
+model: Node.Model,
 /// The microcontroller of the Node.
-microcontroller: ?root.Microcontroller,
+microcontroller: root.Microcontroller,
 /// The region code currently set on the Node.
-region_code: ?root.RegionCode,
+region_code: root.RegionCode,
 /// The firmware version of the Node.
-firmware_version: ?std.SemanticVersion,
+firmware_version: std.SemanticVersion,
 
 pub fn deinit(self: State, gpa: std.mem.Allocator) void {
     gpa.free(self.name);
-    if (self.serial) |serial| {
-        gpa.free(serial);
-    }
+    gpa.free(self.serial);
 }
