@@ -24,6 +24,10 @@ timeout: u64,
 /// overall timeout.
 /// `setRetries` updates it.
 retries: u8,
+/// The WirelessTypes::Frequency representing the radio frequency of this
+/// BaseStation. Null when the BaseStation does not support reading it.
+/// `changeFrequency` updates it.
+frequency: ?root.Frequency,
 
 pub const Error = error{
     Connection,
@@ -132,6 +136,7 @@ pub fn init(
         .state = std.mem.zeroInit(State, .{}),
         .timeout = 0,
         .retries = 0,
+        .frequency = null,
     };
     errdefer result.deinit(gpa);
     result.timeout = result.getTimeout();
@@ -144,8 +149,7 @@ pub fn init(
     result.state.firmware_version = try result.firmwareVersion();
     result.state.microcontroller = try result.microcontroller();
     result.state.region_code = try result.regionCode();
-    result.state.frequency = try result.frequency();
-    result.state.beacon_status = try result.beaconStatus();
+    result.frequency = try result.getFrequency();
     return result;
 }
 
@@ -197,82 +201,80 @@ pub fn setTimeout(self: *BaseStation, timeout_ms: u64) void {
     self.timeout = self.getTimeout();
 }
 
-/// Enables the beacon on the base station using the system time (UTC) as its
-/// starting timestamp.
-/// Updates `state.beacon_status`.
-pub fn enableBeacon(self: *BaseStation) Error!u64 {
+/// Enables the beacon on the base station using the given UTC timestamp, or the
+/// system time (UTC) as its starting timestamp.
+pub fn enableBeacon(
+    self: BaseStation,
+    option: struct {
+        /// The start time for the beacon in UTC seconds from the Unix Epoch
+        /// (01/01/1970); null uses the system time (UTC).
+        utc_time_s: ?u32 = null,
+    },
+) Error!u64 {
     var beacon_time_ns: u64 = 0;
-    const status = root.mscl.mscl_base_station_enable_beacon(
-        self.handle,
-        &beacon_time_ns,
-    );
-    switch (status) {
-        root.mscl.MSCL_OK => {},
+    const status = if (option.utc_time_s) |utc_time_s|
+        root.mscl.mscl_base_station_enable_beacon_at(
+            self.handle,
+            utc_time_s,
+            &beacon_time_ns,
+        )
+    else
+        root.mscl.mscl_base_station_enable_beacon(
+            self.handle,
+            &beacon_time_ns,
+        );
+    return switch (status) {
+        root.mscl.MSCL_OK => beacon_time_ns,
         // A connection error has occurred with the BaseStation
-        root.mscl.MSCL_ERROR_CONNECTION => {
-            return Error.Connection;
-        },
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         // The enable beacon command has failed.
-        root.mscl.MSCL_ERROR_COMMUNICATION => {
-            return Error.Communication;
-        },
-        else => {
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
             std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            return Error.MsclFailure;
+            break :mscl Error.MsclFailure;
         },
-    }
-    self.state.beacon_status = try self.beaconStatus();
-    return beacon_time_ns;
-}
-
-/// Enables the beacon on the base station using the given UTC timestamp.
-/// Updates `state.beacon_status`.
-pub fn enableBeaconAt(self: *BaseStation, utc_time_s: u32) Error!u64 {
-    var beacon_time_ns: u64 = 0;
-    const status = root.mscl.mscl_base_station_enable_beacon_at(
-        self.handle,
-        utc_time_s,
-        &beacon_time_ns,
-    );
-    switch (status) {
-        root.mscl.MSCL_OK => {},
-        // A connection error has occurred with the BaseStation
-        root.mscl.MSCL_ERROR_CONNECTION => {
-            return Error.Connection;
-        },
-        // The enable beacon command has failed.
-        root.mscl.MSCL_ERROR_COMMUNICATION => {
-            return Error.Communication;
-        },
-        else => {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            return Error.MsclFailure;
-        },
-    }
-    self.state.beacon_status = try self.beaconStatus();
-    return beacon_time_ns;
+    };
 }
 
 /// Disables the beacon on the base station.
-/// Updates `state.beacon_status`.
-pub fn disableBeacon(self: *BaseStation) Error!void {
+pub fn disableBeacon(self: BaseStation) Error!void {
     const status = root.mscl.mscl_base_station_disable_beacon(self.handle);
-    switch (status) {
+    return switch (status) {
         root.mscl.MSCL_OK => {},
         // A connection error has occurred with the BaseStation
-        root.mscl.MSCL_ERROR_CONNECTION => {
-            return Error.Connection;
-        },
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         // The disable beacon command has failed.
-        root.mscl.MSCL_ERROR_COMMUNICATION => {
-            return Error.Communication;
-        },
-        else => {
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        else => mscl: {
             std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            return Error.MsclFailure;
+            break :mscl Error.MsclFailure;
         },
-    }
-    self.state.beacon_status = try self.beaconStatus();
+    };
+}
+
+/// Gets the BeaconStatus of the beacon on the base station.
+pub fn getBeaconStatus(self: BaseStation) Error!BeaconStatus {
+    var beacon_status: root.mscl.mscl_beacon_status = undefined;
+    const status = root.mscl.mscl_base_station_get_beacon_status(
+        self.handle,
+        &beacon_status,
+    );
+    return switch (status) {
+        root.mscl.MSCL_OK => .{
+            .enabled = beacon_status.enabled,
+            .timestamp_ns = beacon_status.timestamp_ns,
+        },
+        // Beacon Status is not supported by this BaseStation.
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+        // Failed to get the beacon status.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
 }
 
 /// Gets the Timestamp for the last time MSCL communicated with the
@@ -522,7 +524,7 @@ pub fn resetRadio(self: BaseStation) Error!void {
 }
 
 /// Changes the radio frequency of the base station.
-/// Updates `state.frequency`.
+/// Updates `frequency`.
 pub fn changeFrequency(
     self: *BaseStation,
     new_frequency: root.Frequency,
@@ -551,7 +553,7 @@ pub fn changeFrequency(
             return Error.MsclFailure;
         },
     }
-    self.state.frequency = try self.frequency();
+    self.frequency = try self.getFrequency();
 }
 
 /// Broadcasts the Set to Idle command (will be heard by all nodes on the
@@ -1104,7 +1106,7 @@ fn regionCode(self: BaseStation) Error!?root.RegionCode {
 
 /// Gets the WirelessTypes::Frequency representing the radio frequency of this
 /// BaseStation.
-fn frequency(self: BaseStation) Error!?root.Frequency {
+fn getFrequency(self: BaseStation) Error!?root.Frequency {
     var value: root.mscl.mscl_frequency = 0;
     const status = root.mscl.mscl_base_station_get_frequency(
         self.handle,
@@ -1116,31 +1118,6 @@ fn frequency(self: BaseStation) Error!?root.Frequency {
         // compatible with this version of MSCL.
         root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
         // Failed to read the value from the BaseStation.
-        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
-        // A connection error has occurred with the BaseStation.
-        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
-        else => mscl: {
-            std.log.err("{s}", .{root.mscl.mscl_last_error()});
-            break :mscl Error.MsclFailure;
-        },
-    };
-}
-
-/// Gets the BeaconStatus of the beacon on the base station.
-fn beaconStatus(self: BaseStation) Error!?BeaconStatus {
-    var beacon_status: root.mscl.mscl_beacon_status = undefined;
-    const status = root.mscl.mscl_base_station_get_beacon_status(
-        self.handle,
-        &beacon_status,
-    );
-    return switch (status) {
-        root.mscl.MSCL_OK => .{
-            .enabled = beacon_status.enabled,
-            .timestamp_ns = beacon_status.timestamp_ns,
-        },
-        // Beacon Status is not supported by this BaseStation.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
-        // Failed to get the beacon status.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the BaseStation.
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
