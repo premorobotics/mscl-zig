@@ -204,6 +204,111 @@ pub const FactoryCalibration = struct {
     }
 };
 
+/// The EEPROM of the Node and its cache.
+pub const Eeprom = struct {
+    /// The EEPROM cache of a node: the last known value of each location.
+    pub const Cache = struct {
+        entries: []mscl.mscl_eeprom_entry,
+
+        pub fn deinit(self: Cache) void {
+            if (self.entries.len == 0) {
+                return;
+            }
+            mscl.mscl_eeprom_entries_free(self.entries.ptr);
+        }
+    };
+
+    /// Gets a copy of the eeprom cache as a WirelessTypes::EepromMap.
+    pub fn getCache(node: Node) Error!Cache {
+        var entries: [*c]mscl.mscl_eeprom_entry = null;
+        var count: usize = 0;
+        const status =
+            mscl.mscl_node_get_eeprom_cache(node.handle, &entries, &count);
+        return switch (status) {
+            mscl.MSCL_OK => .{
+                .entries = if (count == 0) &.{} else entries[0..count],
+            },
+            else => mscl: {
+                std.log.err("{s}", .{mscl.mscl_last_error()});
+                break :mscl Error.MsclFailure;
+            },
+        };
+    }
+
+    /// Sets whether to use the eeprom cache when configuring this Node
+    /// (enabled by default). This can be enabled/disabled at any time. It is
+    /// highly recommended to have eeprom caching be enabled. Note:    The
+    /// eeprom cache stores the last known value that was written to / read
+    /// from the Node for each eeprom location. If this is enabled, any reads
+    /// will get the last known value from the cache if it exists, and any
+    /// writes will not write to the Node if the value attempting to be written
+    /// is the same as that stored in the cache. Caching of these values will
+    /// still be performed if this is disabled, however, read and write
+    /// operations will then always reach out to the actual device.
+    pub fn useCache(node: Node, use_cache: bool) void {
+        _ = mscl.mscl_node_use_eeprom_cache(node.handle, use_cache);
+    }
+
+    /// Clears the eeprom cache for this Node. MSCL frees the features of the
+    /// Node with the cache, so this reads `features` again. If that fails, do
+    /// not call the functions of `features` until this succeeds.
+    pub fn clearCache(
+        node: *Node,
+        gpa: std.mem.Allocator,
+    ) (Error || std.mem.Allocator.Error)!void {
+        _ = mscl.mscl_node_clear_eeprom_cache(node.handle);
+        const features = try Features.init(gpa, node.handle);
+        node.features.deinit(gpa);
+        node.features = features;
+    }
+
+    /// Reads a uint16 from the given eeprom location of the node. This may use
+    /// a page download or a read eeprom command. If the value stored in the
+    /// eeprom cache is still valid, this will be returned instead. Note: This
+    /// is an advanced command. In most cases, you should use the built-in
+    /// commands for reading a Node's configuration options.
+    pub fn read(node: Node, location: u16) Error!u16 {
+        var value: u16 = 0;
+        const status =
+            mscl.mscl_node_read_eeprom(node.handle, location, &value);
+        return switch (status) {
+            mscl.MSCL_OK => value,
+            // Attempted to read an unsupported eeprom location.
+            mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+            // Failed to read the value from the Node.
+            mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+            // A connection error has occurred with the parent BaseStation.
+            mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+            else => mscl: {
+                std.log.err("{s}", .{mscl.mscl_last_error()});
+                break :mscl Error.MsclFailure;
+            },
+        };
+    }
+
+    /// Writes a uint16 to the given eeprom location of the node. If
+    /// successful, the cache will be updated with the changed value as well.
+    /// Note: This is an advanced command. In most cases, you should use the
+    /// built-in commands for changing a Node's configuration options.
+    pub fn write(node: Node, location: u16, value: u16) Error!void {
+        const status =
+            mscl.mscl_node_write_eeprom(node.handle, location, value);
+        return switch (status) {
+            mscl.MSCL_OK => {},
+            // Unsupported eeprom location or value.
+            mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
+            // Failed to write the value to the Node.
+            mscl.MSCL_ERROR_NODE_COMMUNICATION => Error.NodeCommunication,
+            // A connection error has occurred with the parent BaseStation.
+            mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+            else => mscl: {
+                std.log.err("{s}", .{mscl.mscl_last_error()});
+                break :mscl Error.MsclFailure;
+            },
+        };
+    }
+};
+
 /// Creates a WirelessNode object with the given node address and parent
 /// BaseStation.
 pub fn init(
