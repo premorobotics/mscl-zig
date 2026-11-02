@@ -907,7 +907,7 @@ pub fn changeFrequency(self: *Node, frequency: root.Frequency) Error!void {
 
 /// Reads the Input Range of the specified ChannelMask currently set on the
 /// Node.
-pub fn getInputRange(
+fn getInputRange(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!root.InputRange {
@@ -934,7 +934,7 @@ pub fn getInputRange(
 
 /// Reads the hardware offset of the specified ChannelMask currently set on the
 /// Node.
-pub fn getHardwareOffset(self: Node, channel_mask: root.ChannelMask) Error!u16 {
+fn getHardwareOffset(self: Node, channel_mask: root.ChannelMask) Error!u16 {
     var offset: u16 = 0;
     const status = mscl.mscl_node_get_hardware_offset(
         self.handle,
@@ -958,7 +958,7 @@ pub fn getHardwareOffset(self: Node, channel_mask: root.ChannelMask) Error!u16 {
 
 /// Reads the Anti-Aliasing Filter of the specified ChannelMask currently set on
 /// the Node.
-pub fn getAntiAliasingFilter(
+fn getAntiAliasingFilter(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!root.Filter {
@@ -985,7 +985,7 @@ pub fn getAntiAliasingFilter(
 
 /// Reads the Low-Pass Filter of the specified ChannelMask currently set on the
 /// Node.
-pub fn getLowPassFilter(
+fn getLowPassFilter(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!root.Filter {
@@ -1012,7 +1012,7 @@ pub fn getLowPassFilter(
 
 /// Reads the High-Pass Filter of the specified ChannelMask currently set on the
 /// Node.
-pub fn getHighPassFilter(
+fn getHighPassFilter(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!root.HighPassFilter {
@@ -1039,7 +1039,7 @@ pub fn getHighPassFilter(
 
 /// Reads the Debounce Filter of the specified ChannelMask currently set on the
 /// Node.
-pub fn getDebounceFilter(self: Node, channel_mask: root.ChannelMask) Error!u16 {
+fn getDebounceFilter(self: Node, channel_mask: root.ChannelMask) Error!u16 {
     var milliseconds: u16 = 0;
     const status = mscl.mscl_node_get_debounce_filter(
         self.handle,
@@ -1062,7 +1062,7 @@ pub fn getDebounceFilter(self: Node, channel_mask: root.ChannelMask) Error!u16 {
 }
 
 /// Gets whether the pull-up resistor is enabled on the Node.
-pub fn getPullUpResistor(
+fn getPullUpResistor(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!bool {
@@ -1089,7 +1089,7 @@ pub fn getPullUpResistor(
 
 /// Reads the gauge factor of the specified ChannelMask currently set on the
 /// Node.
-pub fn getGaugeFactor(self: Node, channel_mask: root.ChannelMask) Error!f32 {
+fn getGaugeFactor(self: Node, channel_mask: root.ChannelMask) Error!f32 {
     var factor: f32 = 0;
     const status = mscl.mscl_node_get_gauge_factor(
         self.handle,
@@ -1113,7 +1113,7 @@ pub fn getGaugeFactor(self: Node, channel_mask: root.ChannelMask) Error!f32 {
 
 /// Gets the linear equation of the specified ChannelMask currently set on the
 /// Node.
-pub fn getLinearEquation(
+fn getLinearEquation(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!mscl.mscl_linear_equation {
@@ -1141,7 +1141,7 @@ pub fn getLinearEquation(
 /// Reads the unit of the specified ChannelMask currently set on the Node. Note:
 /// This unit is just used for reference (such as when downloading logged data)
 /// and does not affect the actual data value.
-pub fn getUnit(
+fn getUnit(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!root.CalCoefUnit {
@@ -1168,7 +1168,7 @@ pub fn getUnit(
 
 /// Gets the filter settling time of the specified ChannelMask currently set on
 /// the Node.
-pub fn getFilterSettlingTime(
+fn getFilterSettlingTime(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!root.SettlingTime {
@@ -1195,7 +1195,7 @@ pub fn getFilterSettlingTime(
 
 /// Reads the WirelessTypes::ThermocoupleType of the specified ChannelMask
 /// currently set on the Node.
-pub fn getThermocoupleType(
+fn getThermocoupleType(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!root.ThermocoupleType {
@@ -1222,7 +1222,7 @@ pub fn getThermocoupleType(
 
 /// Reads the TempSensorOptions of the specified ChannelMask currently set on
 /// the Node.
-pub fn getTempSensorOptions(
+fn getTempSensorOptions(
     self: Node,
     channel_mask: root.ChannelMask,
 ) Error!mscl.mscl_temp_sensor_options {
@@ -1251,7 +1251,7 @@ pub fn getTempSensorOptions(
 /// is currently set on the Node. This represents which of the actual Node's
 /// channels are set to be mapped to derived channels. For example, if the mask
 /// for RMS has ch1 and ch3 active, ch1RMS and ch3RMS channels will be output.
-pub fn getDerivedChannelMask(
+fn getDerivedChannelMask(
     self: Node,
     category: root.DerivedCategory,
 ) Error!root.ChannelMask {
