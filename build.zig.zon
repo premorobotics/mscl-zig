@@ -1,6 +1,6 @@
 .{
     .name = .mscl_zig,
-    .version = "0.0.0",
+    .version = "0.1.0",
     .fingerprint = 0x8c0f916a80b02dcf,
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
