@@ -11,21 +11,14 @@ pub fn build(b: *std.Build) std.mem.Allocator.Error!void {
     // they are built small unless `mscl_optimize` asks otherwise; only the Zig
     // module follows `optimize`.
     const mscl_optimize = b.option(
-        enum { debug, safe, fast, small },
+        std.builtin.OptimizeMode,
         "mscl_optimize",
         "Optimize mode of MSCL, its dependencies and its C wrapper " ++
             "(default: small)",
     ) orelse .small;
-    const mscl_optimize_mode: std.builtin.OptimizeMode =
-        switch (mscl_optimize) {
-            .debug => .Debug,
-            .safe => .ReleaseSafe,
-            .fast => .ReleaseFast,
-            .small => .ReleaseSmall,
-        };
-    const libmscl = buildLibMscl(b, target, mscl_optimize_mode);
+    const libmscl = buildLibMscl(b, target, mscl_optimize);
     const libmscl_wrapper =
-        buildLibMsclWrapper(b, target, mscl_optimize_mode, libmscl);
+        buildLibMsclWrapper(b, target, mscl_optimize, libmscl);
     const trans_libmscl_wrapper: Translator = .init(
         translate_c,
         .{
