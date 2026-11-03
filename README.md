@@ -90,7 +90,7 @@ pub fn build(b: *std.Build) void {
 
 ## Dependency
 - [MSCL fork](https://github.com/premorobotics/MSCL/tree/main) --> Minor change to allow zig build MSCL
-- [boost-libraries-zig](https://github.com/allyourcodebase/boost-libraries-zig) --> Support zig 0.17.0 and add lambda package
+- [boost-libraries-zig](https://github.com/aaumar25/boost-libraries-zig/tree/install_headers) --> Support zig 0.17.0 and add lambda package (required by MSCL)
 - [translate-c](https://codeberg.org/ziglang/translate-c)
 
 ## AI Usage Disclosure
