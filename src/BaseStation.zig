@@ -953,14 +953,14 @@ fn getCommunicationProtocol(self: BaseStation) Error!root.CommProtocol {
 }
 
 /// Gets the model of the BaseStation.
-fn model(self: BaseStation) Error!?Model {
+fn model(self: BaseStation) Error!Model {
     var value: root.mscl.mscl_base_model = 0;
     const status = root.mscl.mscl_base_station_get_model(self.handle, &value);
     return switch (status) {
         root.mscl.MSCL_OK => @as(Model, @fromBackingInt(value)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the BaseStation.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the parent BaseStation.
@@ -976,7 +976,7 @@ fn model(self: BaseStation) Error!?Model {
 fn serial(
     self: BaseStation,
     gpa: std.mem.Allocator,
-) (Error || std.mem.Allocator.Error)!?[]const u8 {
+) (Error || std.mem.Allocator.Error)![]const u8 {
     // MSCL's serial is "model-class-number", at most 5 + 1 + 4 + 1 + 10
     // characters, so it always fits.
     var buffer: [32]u8 = undefined;
@@ -989,7 +989,7 @@ fn serial(
         root.mscl.MSCL_OK => try gpa.dupe(u8, std.mem.sliceTo(&buffer, 0)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the BaseStation.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the parent BaseStation.
@@ -1007,7 +1007,7 @@ fn serial(
 fn name(
     self: BaseStation,
     gpa: std.mem.Allocator,
-) (Error || std.mem.Allocator.Error)!?[]const u8 {
+) (Error || std.mem.Allocator.Error)![]const u8 {
     // MSCL's name is "base-" and the serial, at most 5 + 21 characters, so it
     // always fits.
     var buffer: [32]u8 = undefined;
@@ -1020,7 +1020,7 @@ fn name(
         root.mscl.MSCL_OK => try gpa.dupe(u8, std.mem.sliceTo(&buffer, 0)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the BaseStation.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the parent BaseStation.
@@ -1033,7 +1033,7 @@ fn name(
 }
 
 /// Gets the firmware version of the BaseStation.
-fn firmwareVersion(self: BaseStation) Error!?std.SemanticVersion {
+fn firmwareVersion(self: BaseStation) Error!std.SemanticVersion {
     var version: root.mscl.mscl_version = undefined;
     const status = root.mscl.mscl_base_station_get_firmware_version(
         self.handle,
@@ -1047,7 +1047,7 @@ fn firmwareVersion(self: BaseStation) Error!?std.SemanticVersion {
         },
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the BaseStation.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the parent BaseStation.
@@ -1060,7 +1060,7 @@ fn firmwareVersion(self: BaseStation) Error!?std.SemanticVersion {
 }
 
 /// Gets the microcontroller of the BaseStation.
-fn microcontroller(self: BaseStation) Error!?root.Microcontroller {
+fn microcontroller(self: BaseStation) Error!root.Microcontroller {
     var value: root.mscl.mscl_microcontroller = 0;
     const status = root.mscl.mscl_base_station_get_microcontroller(
         self.handle,
@@ -1070,7 +1070,7 @@ fn microcontroller(self: BaseStation) Error!?root.Microcontroller {
         root.mscl.MSCL_OK => @as(root.Microcontroller, @fromBackingInt(value)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the BaseStation.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the parent BaseStation.
@@ -1083,7 +1083,7 @@ fn microcontroller(self: BaseStation) Error!?root.Microcontroller {
 }
 
 /// Gets the region code currently set on the BaseStation.
-fn regionCode(self: BaseStation) Error!?root.RegionCode {
+fn regionCode(self: BaseStation) Error!root.RegionCode {
     var region_code: root.mscl.mscl_region_code = 0;
     const status = root.mscl.mscl_base_station_get_region_code(
         self.handle,
@@ -1093,7 +1093,7 @@ fn regionCode(self: BaseStation) Error!?root.RegionCode {
         root.mscl.MSCL_OK => @as(root.RegionCode, @fromBackingInt(region_code)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read from the BaseStation.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the parent BaseStation.

@@ -1,5 +1,4 @@
-//! Information read from the BaseStation when it is initialized. A value that
-//! the BaseStation does not support is null.
+//! Information read from the BaseStation when it is initialized.
 
 const std = @import("std");
 const root = @import("../root.zig");
@@ -9,23 +8,19 @@ const State = @This();
 
 /// The name of the BaseStation. This is the universal basestation name that
 /// should be used for SensorCloud.
-name: ?[]const u8,
+name: []const u8,
 /// The serial number of the BaseStation.
-serial: ?[]const u8,
+serial: []const u8,
 /// The model of the BaseStation.
-model: ?BaseStation.Model,
+model: BaseStation.Model,
 /// The microcontroller of the BaseStation.
-microcontroller: ?root.Microcontroller,
+microcontroller: root.Microcontroller,
 /// The region code currently set on the BaseStation.
-region_code: ?root.RegionCode,
+region_code: root.RegionCode,
 /// The firmware version of the BaseStation.
-firmware_version: ?std.SemanticVersion,
+firmware_version: std.SemanticVersion,
 
 pub fn deinit(self: State, gpa: std.mem.Allocator) void {
-    if (self.serial) |serial| {
-        gpa.free(serial);
-    }
-    if (self.name) |name| {
-        gpa.free(name);
-    }
+    gpa.free(self.serial);
+    gpa.free(self.name);
 }

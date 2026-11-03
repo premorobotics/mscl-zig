@@ -42,19 +42,18 @@ fn printState(
     state: mscl_zig.BaseStation.State,
 ) std.Io.Writer.Error!void {
     try stdout.print(
-        \\  model: {?t}
-        \\  serial: {?s}
-        \\  name: {?s}
+        \\  model: {t}
+        \\  serial: {s}
+        \\  name: {s}
         \\
     , .{ state.model, state.serial, state.name });
-    if (state.firmware_version) |version| {
-        try stdout.print("  firmware version: {f}\n", .{version});
-    } else {
-        try stdout.writeAll("  firmware version: null\n");
-    }
     try stdout.print(
-        \\  microcontroller: {?t}
-        \\  region code: {?t}
+        "  firmware version: {f}\n",
+        .{state.firmware_version},
+    );
+    try stdout.print(
+        \\  microcontroller: {t}
+        \\  region code: {t}
         \\
     , .{ state.microcontroller, state.region_code });
 }
