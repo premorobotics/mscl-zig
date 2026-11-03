@@ -162,11 +162,12 @@ pub fn deinit(self: BaseStation, gpa: std.mem.Allocator) void {
 }
 
 /// Pings the base station
-pub fn ping(self: BaseStation) Error!bool {
+pub fn ping(self: BaseStation) Error!void {
     var success = false;
     const status = root.mscl.mscl_base_station_ping(self.handle, &success);
+    if (!success) return Error.Connection;
     return switch (status) {
-        root.mscl.MSCL_OK => true,
+        root.mscl.MSCL_OK => {},
         // A connection error has occurred with the BaseStation
         root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         else => mscl: {
