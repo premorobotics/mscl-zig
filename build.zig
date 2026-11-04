@@ -180,7 +180,11 @@ fn buildLibMscl(
         .flags = flags,
     });
     switch (target.result.os.tag) {
-        .windows => {},
+        .windows => {
+            mod.linkSystemLibrary("ws2_32", .{});
+            mod.linkSystemLibrary("ole32", .{});
+            mod.linkSystemLibrary("oleaut32", .{});
+        },
         .linux => {
             mod.addCSourceFiles(.{
                 .root = mscl.path("src/mscl/Communication"),

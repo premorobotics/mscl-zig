@@ -1049,7 +1049,7 @@ pub const BaseStations = struct {
     };
 
     /// Lists the base stations attached to this computer. Caller must call
-    /// deinit after use.
+    /// `deinit` after use.
     pub fn list() (BaseStations.Error)!BaseStations {
         var devices: [*c]mscl.mscl_device_info = null;
         var count: usize = 0;
