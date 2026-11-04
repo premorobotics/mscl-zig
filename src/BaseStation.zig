@@ -25,9 +25,9 @@ timeout: u64,
 /// `setRetries` updates it.
 retries: u8,
 /// The WirelessTypes::Frequency representing the radio frequency of this
-/// BaseStation. Null when the BaseStation does not support reading it.
+/// BaseStation.
 /// `changeFrequency` updates it.
-frequency: ?root.Frequency,
+frequency: root.Frequency,
 
 pub const Error = error{
     Connection,
@@ -136,7 +136,7 @@ pub fn init(
         .state = std.mem.zeroInit(State, .{}),
         .timeout = 0,
         .retries = 0,
-        .frequency = null,
+        .frequency = .unknown,
     };
     errdefer result.deinit(gpa);
     result.timeout = result.getTimeout();
@@ -1107,7 +1107,7 @@ fn regionCode(self: BaseStation) Error!root.RegionCode {
 
 /// Gets the WirelessTypes::Frequency representing the radio frequency of this
 /// BaseStation.
-fn getFrequency(self: BaseStation) Error!?root.Frequency {
+fn getFrequency(self: BaseStation) Error!root.Frequency {
     var value: root.mscl.mscl_frequency = 0;
     const status = root.mscl.mscl_base_station_get_frequency(
         self.handle,
@@ -1117,7 +1117,7 @@ fn getFrequency(self: BaseStation) Error!?root.Frequency {
         root.mscl.MSCL_OK => @as(root.Frequency, @fromBackingInt(value)),
         // Attempted to read an unsupported option. The device firmware is not
         // compatible with this version of MSCL.
-        root.mscl.MSCL_ERROR_NOT_SUPPORTED => null,
+        root.mscl.MSCL_ERROR_NOT_SUPPORTED => Error.NotSupported,
         // Failed to read the value from the BaseStation.
         root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
         // A connection error has occurred with the BaseStation.

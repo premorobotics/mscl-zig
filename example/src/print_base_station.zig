@@ -42,7 +42,7 @@ pub fn main(init: std.process.Init) !void {
         \\Base station on {s}
         \\  timeout: {d} ms
         \\  retries: {d}
-        \\  frequency: {?t}
+        \\  frequency: {t}
         \\
     , .{
         port,
