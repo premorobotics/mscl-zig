@@ -46,8 +46,8 @@ pub fn main(init: std.process.Init) !void {
         \\
     , .{
         port,
-        base_station.timeout,
-        base_station.retries,
+        base_station.getTimeout(),
+        base_station.getRetries(),
         base_station.frequency,
     });
     if (base_station.getBeaconStatus()) |beacon| {

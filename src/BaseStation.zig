@@ -1,3 +1,14 @@
+//! Timeout and retries are settings of this BaseStation object, not of the
+//! device. They are never written to the BaseStation, so they are lost on
+//! `deinit`, and every `init` starts again from MSCL's defaults:
+//! - timeout: 20 ms, MSCL's default for a serial BaseStation. Commands sent
+//!   to Nodes through this BaseStation wait `timeout + timeout / 2 + 50` ms,
+//!   so 80 ms by default.
+//! - retries: 2, the extra attempts after a failed read or write of a config
+//!   option on the BaseStation.
+//! Set them with `setTimeout` and `setRetries` after every `init`, and read
+//! them with `getTimeout` and `getRetries`.
+
 const std = @import("std");
 const root = @import("root.zig");
 
@@ -11,19 +22,6 @@ handle: *root.mscl.mscl_base_station,
 features: Features,
 /// Information read from this BaseStation when it is initialized.
 state: State,
-/// The timeout, in milliseconds, to use when waiting for responses from
-/// commands.
-/// This timeout is used directly for BaseStation commands, while some
-/// additional time is added for Node commands.
-/// `setTimeout` updates it.
-timeout: u64,
-/// The number of retry attempts for reading and writing config options on the
-/// BaseStation. By default, the number of retries is 0.
-/// Note: The timeout that is set per command will be per read and write
-/// attempt, meaning this retry number is multiplied by the timeout for your
-/// overall timeout.
-/// `setRetries` updates it.
-retries: u8,
 /// The WirelessTypes::Frequency representing the radio frequency of this
 /// BaseStation.
 /// `changeFrequency` updates it.
@@ -134,13 +132,9 @@ pub fn init(
         .handle = handle.?,
         .features = std.mem.zeroInit(Features, .{}),
         .state = std.mem.zeroInit(State, .{}),
-        .timeout = 0,
-        .retries = 0,
         .frequency = .unknown,
     };
     errdefer result.deinit(gpa);
-    result.timeout = result.getTimeout();
-    result.retries = result.getRetries();
 
     result.features = try Features.init(gpa, result.handle);
     result.state.model = try result.model();
@@ -182,13 +176,11 @@ pub fn ping(self: BaseStation) Error!void {
 /// Note: The timeout that is set per command will be per read and write
 /// attempt, meaning this retry number is multiplied by the timeout for your
 /// overall timeout.
-/// Updates `retries`.
-pub fn setRetries(self: *BaseStation, retries: u8) void {
+pub fn setRetries(self: BaseStation, retries: u8) void {
     _ = root.mscl.mscl_base_station_set_retries(
         self.handle,
         retries,
     );
-    self.retries = self.getRetries();
 }
 
 /// Sets the timeout to use when waiting for responses from commands.
@@ -196,10 +188,8 @@ pub fn setRetries(self: *BaseStation, retries: u8) void {
 /// additional time is added for Node commands.
 /// Note: Some commands have a minimum timeout that will override this if set
 /// lower than the minimum.
-/// Updates `timeout`.
-pub fn setTimeout(self: *BaseStation, timeout_ms: u64) void {
+pub fn setTimeout(self: BaseStation, timeout_ms: u64) void {
     _ = root.mscl.mscl_base_station_set_timeout(self.handle, timeout_ms);
-    self.timeout = self.getTimeout();
 }
 
 /// Enables the beacon on the base station using the given UTC timestamp, or the
@@ -1134,7 +1124,7 @@ fn getFrequency(self: BaseStation) Error!root.Frequency {
 /// Note: The timeout that is set per command will be per read and write
 /// attempt, meaning this retry number is multiplied by the timeout for your
 /// overall timeout.
-fn getRetries(self: BaseStation) u8 {
+pub fn getRetries(self: BaseStation) u8 {
     var retries: u8 = 0;
     _ = root.mscl.mscl_base_station_get_retries(self.handle, &retries);
     return retries;
@@ -1146,7 +1136,7 @@ fn getRetries(self: BaseStation) u8 {
 /// additional time is added for Node commands.
 /// Note: Some commands have a minimum timeout that will override this if set
 /// lower than the minimum.
-fn getTimeout(self: BaseStation) u64 {
+pub fn getTimeout(self: BaseStation) u64 {
     var timeout_ms: u64 = 0;
     _ = root.mscl.mscl_base_station_get_timeout(self.handle, &timeout_ms);
     return timeout_ms;
