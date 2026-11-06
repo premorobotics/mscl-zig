@@ -1210,14 +1210,15 @@ pub fn erase(self: Node) Error!void {
 /// start the Node sampling, with the current Sampling settings that are applied
 /// to the Node. Note: To start the Node in Synchronized Sampling Mode, use the
 /// SyncSamplingNetwork class.
-pub fn startNonSyncSampling(self: Node) Error!bool {
+pub fn startNonSyncSampling(self: Node) Error!void {
     var success: bool = false;
     const status = mscl.mscl_node_start_non_sync_sampling(
         self.handle,
         &success,
     );
     return switch (status) {
-        mscl.MSCL_OK => success,
+        // The Node did not confirm that it started sampling.
+        mscl.MSCL_OK => if (success) {} else Error.NodeCommunication,
         // A connection error has occurred with the parent BaseStation.
         mscl.MSCL_ERROR_CONNECTION => Error.Connection,
         // The Configuration of the Node is not set for Non-Sync Sampling Mode.
