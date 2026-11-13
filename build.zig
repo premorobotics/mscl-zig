@@ -55,6 +55,10 @@ fn buildLibMsclWrapper(
         .link_libcpp = true,
     });
     mod.addIncludePath(b.path("include"));
+    // Boost.Asio's serial port code: see `glibc/bits/termios-baud.h`.
+    if (target.result.isGnuLibC()) {
+        mod.addIncludePath(b.path("glibc"));
+    }
     mod.linkLibrary(libmscl);
     // MSCL's headers include Boost's, which linking MSCL does not pass on.
     const boost = b.dependency("boost", .{
@@ -112,6 +116,10 @@ fn buildLibMscl(
         .link_libc = true,
         .link_libcpp = true,
     });
+    // Boost.Asio's serial port code: see `glibc/bits/termios-baud.h`.
+    if (target.result.isGnuLibC()) {
+        mod.addIncludePath(b.path("glibc"));
+    }
     // Boost.Filesystem is compiled; Asio, Beast, Circular Buffer, CRC, Lambda
     // and Math are header-only.
     const boost = b.dependency("boost", .{
