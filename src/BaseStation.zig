@@ -568,6 +568,44 @@ pub fn broadcastSetToIdle(self: BaseStation) Error!root.SetToIdleStatus {
     };
 }
 
+/// Attempts to set the Node at `node_address` to the Idle state. This will
+/// stop the node from sampling or sleeping, and put it into an idle state so
+/// that it may be communicated with (configured, started sampling, etc.). This
+/// operation may take several seconds to complete. The returned
+/// SetToIdleStatus object may be used to determine the current status of the
+/// Set to Idle operation.
+/// Unlike `Node.setToIdle`, nothing is read from the Node first, so a sleeping
+/// Node can be set to idle.
+pub fn setNodeToIdle(
+    self: BaseStation,
+    node_address: u32,
+) Error!root.SetToIdleStatus {
+    var node: ?*root.mscl.mscl_node = null;
+    const created =
+        root.mscl.mscl_node_create(self.handle, node_address, &node);
+    switch (created) {
+        root.mscl.MSCL_OK => {},
+        else => {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            return Error.MsclFailure;
+        },
+    }
+    defer root.mscl.mscl_node_destroy(node.?);
+    var handle: ?*root.mscl.mscl_set_to_idle_status = null;
+    const status = root.mscl.mscl_node_set_to_idle(node.?, &handle);
+    return switch (status) {
+        root.mscl.MSCL_OK => .{ .handle = handle.? },
+        // Failed to communicate with the parent BaseStation.
+        root.mscl.MSCL_ERROR_COMMUNICATION => Error.Communication,
+        // A connection error has occurred with the parent BaseStation.
+        root.mscl.MSCL_ERROR_CONNECTION => Error.Connection,
+        else => mscl: {
+            std.log.err("{s}", .{root.mscl.mscl_last_error()});
+            break :mscl Error.MsclFailure;
+        },
+    };
+}
+
 /// Reads every setting that a BaseStationConfig can hold from the
 /// BaseStation. A setting that the BaseStation does not support is null or
 /// empty.
